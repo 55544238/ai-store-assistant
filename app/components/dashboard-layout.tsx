@@ -52,4 +52,74 @@ export default function DashboardLayout({
           <p className="mt-1 text-xs text-slate-500">
             Your store, made smarter
           </p>
-        </div
+        </div>
+
+        <nav className="flex-1 space-y-1 p-4">
+          {navigation.map((item) => {
+            const active =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+                }`}
+              >
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-slate-200 p-4 text-xs text-slate-500 dark:border-slate-800">
+          AI-powered selling for your store
+        </div>
+      </aside>
+
+      <div className="min-h-screen lg:pl-64">
+        <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6 dark:border-slate-800 dark:bg-slate-900/95">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              aria-label="Open navigation menu"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-100 lg:hidden dark:border-slate-700 dark:hover:bg-slate-800"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              Menu
+            </button>
+
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold">
+                {title || "AI Store Assistant"}
+              </h1>
+              {description && (
+                <p className="mt-0.5 truncate text-sm text-slate-500">
+                  {description}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <Link
+            href="/products"
+            className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+          >
+            Add product
+          </Link>
+        </header>
+
+        <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
