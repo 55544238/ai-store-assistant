@@ -114,4 +114,4 @@ export default function Home() {
             >
               <span>💬</span> Messages
             </button>
-          </div
+          </div>
