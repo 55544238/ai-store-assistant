@@ -7,9 +7,18 @@ import { supabase } from "@/src/lib/supabase";
 
 const stats = [
   { label: "Products", value: "Manage", icon: "📦", href: "/products" },
-  { label: "Messages", value: "Coming soon", icon: "💬", href: null },
-  { label: "Orders", value: "Coming soon", icon: "🛍️", href: null },
+  { label: "Inventory", value: "Manage stock", icon: "📊", href: "/inventory" },
+  { label: "Messages", value: "View messages", icon: "💬", href: "/messages" },
   { label: "Sales", value: "Coming soon", icon: "💰", href: null },
+];
+
+const navigation = [
+  { label: "Overview", icon: "▦", href: "/" },
+  { label: "Products", icon: "📦", href: "/products" },
+  { label: "Inventory", icon: "📊", href: "/inventory" },
+  { label: "Messages", icon: "💬", href: "/messages" },
+  { label: "AI Assistant", icon: "🤖", href: "/chat" },
+  { label: "Settings", icon: "⚙️", href: "/settings" },
 ];
 
 export default function Home() {
@@ -32,7 +41,7 @@ export default function Home() {
       setCheckingAuth(false);
     }
 
-    checkLogin();
+    void checkLogin();
 
     const {
       data: { subscription },
@@ -51,14 +60,6 @@ export default function Home() {
       subscription.unsubscribe();
     };
   }, [router]);
-
-  function navigate(href: string | null, label: string) {
-    if (href) {
-      router.push(href);
-    } else {
-      alert(`${label} page is not connected yet. We'll build it next!`);
-    }
-  }
 
   async function logout() {
     const { error } = await supabase.auth.signOut();
@@ -91,60 +92,33 @@ export default function Home() {
           </div>
         </div>
 
-        <nav className="p-4">
+        <nav className="space-y-1 p-4">
           <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Main
+            Main menu
           </p>
 
-          <div className="space-y-1">
+          {navigation.map((item) => (
             <button
-              onClick={() => router.push("/")}
-              className="flex w-full items-center gap-3 rounded-xl bg-slate-100 px-3 py-2.5 text-sm font-medium hover:bg-slate-200"
+              key={item.href}
+              type="button"
+              onClick={() => router.push(item.href)}
+              className={`flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                item.href === "/"
+                  ? "bg-slate-100 font-medium text-slate-900"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+              }`}
             >
-              <span>▦</span> Overview
+              <span>{item.icon}</span>
+              {item.label}
             </button>
-
-            <button
-              onClick={() => router.push("/products")}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              <span>📦</span> Products
-            </button>
-
-            <button
-              onClick={() => navigate(null, "Inventory")}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              <span>📊</span> Inventory
-            </button>
-
-            <button
-              onClick={() => navigate(null, "Messages")}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              <span>💬</span> Messages
-            </button>
-
-            <button
-              onClick={() => navigate(null, "Orders")}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              <span>🛍️</span> Orders
-            </button>
-
-            <button
-              onClick={() => router.push("/settings")}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              <span>⚙️</span> Settings
-            </button>
-          </div>
+          ))}
         </nav>
 
         <div className="absolute bottom-0 w-full border-t border-slate-200 p-4">
           <button
+            type="button"
             onClick={logout}
-            className="w-full rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-red-50 hover:text-red-600"
+            className="w-full cursor-pointer rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 transition hover:bg-red-50 hover:text-red-600"
           >
             ↪ Log out
           </button>
@@ -154,15 +128,16 @@ export default function Home() {
       <main className="min-h-screen md:ml-64">
         <header className="flex min-h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 md:px-8">
           <div>
-            <h1 className="text-xl font-bold">Dashboard</h1>
+            <h1 className="text-xl font-bold">Overview</h1>
             <p className="mt-1 text-sm text-slate-500">
               Manage your store from one place.
             </p>
           </div>
 
           <button
+            type="button"
             onClick={logout}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium hover:bg-slate-50 md:hidden"
+            className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium transition hover:bg-slate-50 md:hidden"
           >
             Log out
           </button>
@@ -180,8 +155,15 @@ export default function Home() {
             {stats.map((stat) => (
               <button
                 key={stat.label}
-                onClick={() => navigate(stat.href, stat.label)}
-                className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                type="button"
+                onClick={() => {
+                  if (stat.href) {
+                    router.push(stat.href);
+                  } else {
+                    alert(`${stat.label} is not available yet.`);
+                  }
+                }}
+                className="cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-slate-500">
@@ -189,9 +171,7 @@ export default function Home() {
                   </span>
                   <span className="text-2xl">{stat.icon}</span>
                 </div>
-
                 <p className="mt-5 text-lg font-semibold">{stat.value}</p>
-
                 <p className="mt-1 text-xs text-slate-400">
                   {stat.href ? "Open and manage" : "Not connected yet"}
                 </p>
@@ -208,21 +188,30 @@ export default function Home() {
                 <div>
                   <h3 className="font-semibold">Product catalogue</h3>
                   <p className="text-sm text-slate-500">
-                    Manage your products and inventory.
+                    Manage products, prices, and inventory.
                   </p>
                 </div>
               </div>
 
               <p className="mt-4 text-sm leading-6 text-slate-600">
                 Add products, update prices, manage sizes and colors, and keep
-                your stock information up to date.
+                stock information up to date.
               </p>
 
               <button
+                type="button"
                 onClick={() => router.push("/products")}
-                className="mt-6 w-full rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="mt-6 w-full cursor-pointer rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
               >
                 View products →
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push("/products/new")}
+                className="mt-3 w-full cursor-pointer rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold transition hover:bg-slate-50"
+              >
+                + Add a product
               </button>
             </div>
 
@@ -240,33 +229,36 @@ export default function Home() {
               </div>
 
               <p className="mt-4 text-sm leading-6 text-slate-600">
-                Your assistant can help answer product questions using your
-                catalogue. Keep product prices and stock accurate so customers
-                receive reliable information.
+                Test product questions and help customers get accurate
+                information from your catalogue.
               </p>
 
               <button
+                type="button"
                 onClick={() => router.push("/chat")}
-                className="mt-6 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold transition hover:bg-slate-50"
+                className="mt-6 w-full cursor-pointer rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold transition hover:bg-slate-50"
               >
                 Open AI assistant →
               </button>
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="font-semibold">Getting started</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Start by adding your products and their available sizes, colors,
-              prices, and stock quantities. You can connect more sales channels
-              as the assistant develops.
-            </p>
-
+          <section className="rounded-2xl border border-indigo-100 bg-indigo-50 p-5 sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <div>
+              <h2 className="font-semibold text-slate-900">
+                Ready to test a customer question?
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Ask your AI assistant about a product, size, price, or stock
+                availability.
+              </p>
+            </div>
             <button
-              onClick={() => router.push("/products")}
-              className="mt-4 cursor-pointer text-sm font-semibold text-slate-900 underline underline-offset-4 hover:text-slate-600"
+              type="button"
+              onClick={() => router.push("/chat")}
+              className="mt-4 shrink-0 cursor-pointer rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-800 sm:mt-0"
             >
-              Set up your catalogue
+              Try it now →
             </button>
           </section>
         </div>
