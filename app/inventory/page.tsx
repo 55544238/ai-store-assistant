@@ -90,4 +90,5 @@ export default function InventoryPage() {
   const rows = useMemo<InventoryRow[]>(
     () =>
       products.flatMap((product) => {
-        const variants
+        const variants  );
+}
