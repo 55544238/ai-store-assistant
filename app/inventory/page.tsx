@@ -90,24 +90,4 @@ export default function InventoryPage() {
   const rows = useMemo<InventoryRow[]>(
     () =>
       products.flatMap((product) => {
-        const variants = product.product_variants ?? [];
-
-        if (variants.length === 0) {
-          return [
-            {
-              key: product.id,
-              productId: product.id,
-              name: product.name,
-              size: "—",
-              color: "—",
-              stock: null,
-              status: product.status,
-            },
-          ];
-        }
-
-        return variants.map((variant, index) => ({
-          key: `${product.id}-${index}`,
-          productId: product.id,
-          name: product.name,
-          size
+        const variants
