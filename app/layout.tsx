@@ -1,4 +1,3 @@
-
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import ThemeProvider from "./theme-provider";
@@ -17,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AI Store Assistant",
   description: "AI-powered sales assistant for online stores",
+  verification: {
+    google: "p-L5OA2458cK5GsE42x5ddT7LkqWbPQeGIf1yk30e-E",
+  },
 };
 
 export default function RootLayout({
