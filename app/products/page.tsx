@@ -1,11 +1,9 @@
-﻿
+
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/src/lib/supabase";
-
-const STORE_ID = "138ee5b7-d235-4cfa-b620-8adcfb8b5838";
 
 type Product = {
   id: string;
@@ -45,23 +43,55 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("All categories");
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadProducts() {
       setLoading(true);
       setError("");
 
       try {
-        const { data: productData, error: productError } = await supabase
-          .from("products")
-          .select("id, name, category, price, status")
-          .eq("store_id", STORE_ID)
-          .order("created_at", { ascending: false });
+        // Get the currently signed-in user.
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) throw userError;
+
+        if (!user) {
+          throw new Error("Please sign in to view your products.");
+        }
+
+        // Find this user's store.
+        const { data: membership, error: membershipError } =
+          await supabase
+            .from("store_members")
+            .select("store_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+        if (membershipError) throw membershipError;
+
+        if (!membership) {
+          throw new Error(
+            "Your account does not have a store membership."
+          );
+        }
+
+        // Load only products belonging to this user's store.
+        const { data: productData, error: productError } =
+          await supabase
+            .from("products")
+            .select("id, name, category, price, status")
+            .eq("store_id", membership.store_id)
+            .order("created_at", { ascending: false });
 
         if (productError) throw productError;
 
         const rows = (productData ?? []) as Product[];
 
         if (rows.length === 0) {
-          setProducts([]);
+          if (!cancelled) setProducts([]);
           return;
         }
 
@@ -109,10 +139,10 @@ export default function ProductsPage() {
 
           let status = "Active";
 
-          if (stock === 0) {
-            status = "Out of stock";
-          } else if (product.status?.toLowerCase() !== "active") {
+          if (product.status?.toLowerCase() !== "active") {
             status = "Inactive";
+          } else if (stock === 0) {
+            status = "Out of stock";
           }
 
           const productImage = images.find(
@@ -130,25 +160,33 @@ export default function ProductsPage() {
           };
         });
 
-        setProducts(displayProducts);
-      } catch (err) {
+        if (!cancelled) setProducts(displayProducts);
+      } catch (err: unknown) {
         console.error("Load products error:", err);
-        setError(
+
+        const errorMessage =
           err instanceof Error
             ? err.message
-            : "An unexpected error occurred."
-        );
+            : "An unexpected error occurred.";
+
+        if (!cancelled) setError(errorMessage);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     loadProducts();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const categories = [
     "All categories",
-    ...Array.from(new Set(products.map((product) => product.category))),
+    ...Array.from(
+      new Set(products.map((product) => product.category))
+    ),
   ];
 
   const filteredProducts = products.filter((product) => {
@@ -165,33 +203,30 @@ export default function ProductsPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-      
-<header className="border-b border-slate-200 bg-white">
-  <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-    <div>
-      <Link
-        href="/"
-        className="mb-3 inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-      >
-        ← Back to Dashboard
-      </Link>
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+          <div>
+            <Link
+              href="/"
+              className="mb-3 inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              ← Back to Dashboard
+            </Link>
 
-      <h1 className="text-2xl font-bold">Products</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Manage your products, prices, and inventory.
-      </p>
-    </div>
+            <h1 className="text-2xl font-bold">Products</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Manage your products, prices, and inventory.
+            </p>
+          </div>
 
-    <Link
-      href="/products/new"
-      className="rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
-    >
-      + Add Product
-    </Link>
-  </div>
-</header>
-
-
+          <Link
+            href="/products/new"
+            className="rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            + Add Product
+          </Link>
+        </div>
+      </header>
 
       <section className="mx-auto max-w-7xl px-6 py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -233,28 +268,19 @@ export default function ProductsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-10 text-center text-sm text-slate-500"
-                    >
+                    <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-500">
                       Loading products...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-10 text-center text-sm text-red-600"
-                    >
+                    <td colSpan={6} className="px-6 py-10 text-center text-sm text-red-600">
                       Could not load products: {error}
                     </td>
                   </tr>
                 ) : filteredProducts.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-10 text-center text-sm text-slate-500"
-                    >
+                    <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-500">
                       {products.length === 0
                         ? "No products yet. Add your first product."
                         : "No products match your search."}
@@ -282,7 +308,9 @@ export default function ProductsPage() {
 
                           <div>
                             <p className="font-medium">{product.name}</p>
-                            <p className="text-xs text-slate-400">Product</p>
+                            <p className="text-xs text-slate-400">
+                              Product
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -326,7 +354,7 @@ export default function ProductsPage() {
                       <td className="px-6 py-5">
                         <button
                           type="button"
-                          className="text-sm font-medium text-slate-600 hover:text-black"
+                          className="cursor-pointer text-sm font-medium text-slate-600 hover:text-black"
                           onClick={() => {
                             window.location.href = `/products/edit?id=${product.id}`;
                           }}
@@ -353,9 +381,10 @@ export default function ProductsPage() {
                 Your AI will use these products
               </h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                Every product you add here becomes part of your store catalog.
-                The AI assistant will use the catalog to answer customer
-                questions about prices, sizes, colors, and stock.
+                Every product you add here becomes part of your store
+                catalog. The AI assistant will use the catalog to
+                answer customer questions about prices, sizes, colors,
+                and stock.
               </p>
             </div>
           </div>
