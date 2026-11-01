@@ -3,7 +3,6 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const STORE_ID = "138ee5b7-d235-4cfa-b620-8adcfb8b5838";
 
 export const maxDuration = 30;
 
@@ -129,6 +128,54 @@ export async function POST(request: Request) {
         autoRefreshToken: false,
       },
     });
+        // Verify the signed-in user before accessing any store data.
+    const authorization = request.headers.get("authorization");
+    const accessToken = authorization?.startsWith("Bearer ")
+      ? authorization.slice(7)
+      : null;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "Please sign in again to use the assistant." },
+        { status: 401 }
+      );
+    }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(accessToken);
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: "Your session is invalid. Please sign in again." },
+        { status: 401 }
+      );
+    }
+
+    // Find the store this user is authorized to access.
+    const { data: memberships, error: membershipError } = await supabase
+      .from("store_members")
+      .select("store_id")
+      .eq("user_id", user.id);
+
+    if (membershipError) {
+      console.error("Store membership lookup failed:", membershipError.message);
+
+      return NextResponse.json(
+        { error: "I couldn't verify your store access." },
+        { status: 503 }
+      );
+    }
+
+    if (!memberships || memberships.length !== 1) {
+      return NextResponse.json(
+        { error: "Your account must have exactly one authorized store." },
+        { status: 403 }
+      );
+    }
+
+    const storeId = memberships[0].store_id;
 
     // 1. Find this conversation for the current store.
     // A conversation ID alone is not authorization; every lookup is
@@ -138,7 +185,7 @@ export async function POST(request: Request) {
         .from("chat_conversations")
         .select("id")
         .eq("id", conversationId)
-        .eq("store_id", STORE_ID)
+      .eq("store_id", storeId)
         .maybeSingle();
 
     if (conversationLookupError) {
@@ -160,7 +207,7 @@ export async function POST(request: Request) {
         .from("chat_conversations")
         .insert({
           id: conversationId,
-          store_id: STORE_ID,
+         store_id: storeId,
           title: message.slice(0, 100),
         });
 
@@ -186,7 +233,7 @@ export async function POST(request: Request) {
       .from("chat_messages")
       .select("role, content")
       .eq("conversation_id", conversationId)
-      .eq("store_id", STORE_ID)
+      .eq("store_id", storeId)
       .order("created_at", { ascending: false })
       .limit(10);
 
@@ -218,7 +265,7 @@ export async function POST(request: Request) {
       .from("chat_messages")
       .insert({
         conversation_id: conversationId,
-        store_id: STORE_ID,
+        store_id: storeId,
         role: "user",
         content: message,
       });
@@ -239,7 +286,7 @@ export async function POST(request: Request) {
     const { data: products, error: productsError } = await supabase
       .from("products")
       .select("id, name, description, category, price, status")
-      .eq("store_id", STORE_ID)
+      .eq("store_id", storeId)
       .eq("status", "active")
       .limit(100);
 
@@ -449,7 +496,7 @@ export async function POST(request: Request) {
       .from("chat_messages")
       .insert({
         conversation_id: conversationId,
-        store_id: STORE_ID,
+        store_id: storeId,
         role: "assistant",
         content: reply,
       });
@@ -473,7 +520,7 @@ export async function POST(request: Request) {
       .from("chat_conversations")
       .update({ updated_at: new Date().toISOString() })
       .eq("id", conversationId)
-      .eq("store_id", STORE_ID);
+      .eq("store_id", storeId);
 
     if (updateConversationError) {
       console.error(
