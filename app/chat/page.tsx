@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { supabase } from "@/src/lib/supabase";
 
 type ProductVariant = {
   size: string | null;
@@ -278,9 +279,21 @@ export default function ChatPage() {
 
   const refreshConversations = useCallback(async () => {
     try {
-      const response = await fetch("/api/chat/history", {
-        cache: "no-store",
-      });
+     const {
+  data: { session },
+  error: sessionError,
+} = await supabase.auth.getSession();
+
+if (sessionError || !session) {
+  throw new Error("Please sign in again to view your conversations.");
+}
+
+const response = await fetch("/api/chat/history", {
+  cache: "no-store",
+  headers: {
+    Authorization: `Bearer ${session.access_token}`,
+  },
+});
       const data = await response.json();
 
       if (!response.ok) {
@@ -324,11 +337,24 @@ export default function ChatPage() {
 
         if (cancelled) return;
         setConversationId(savedId);
+const {
+  data: { session: historySession },
+  error: historySessionError,
+} = await supabase.auth.getSession();
 
-        const response = await fetch(
-          `/api/chat/history?conversationId=${encodeURIComponent(savedId)}`,
-          { cache: "no-store" }
-        );
+if (historySessionError || !historySession) {
+  throw new Error("Please sign in again to view this conversation.");
+}
+
+const response = await fetch(
+  `/api/chat/history?conversationId=${encodeURIComponent(savedId)}`,
+  {
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${historySession.access_token}`,
+    },
+  }
+);
         const data = await response.json();
 
         if (!response.ok) {
@@ -406,12 +432,26 @@ export default function ChatPage() {
     setSidebarOpen(false);
 
     try {
-      const response = await fetch(
-        `/api/chat/history?conversationId=${encodeURIComponent(id)}`,
-        { cache: "no-store" }
-      );
-      const data = await response.json();
+  const {
+    data: { session: currentSession },
+    error: currentSessionError,
+  } = await supabase.auth.getSession();
 
+  if (currentSessionError || !currentSession) {
+    throw new Error("Please sign in again to view this conversation.");
+  }
+
+  const response = await fetch(
+    `/api/chat/history?conversationId=${encodeURIComponent(id)}`,
+    {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${currentSession.access_token}`,
+      },
+    }
+  );
+
+  const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Could not open this conversation.");
       }
@@ -478,16 +518,30 @@ export default function ChatPage() {
     setLoading(true);
     setHistoryError("");
 
+   
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: trimmed,
-          conversationId,
-          messages: updatedMessages.slice(1).slice(-20),
-        }),
-      });
+      const {
+  data: { session },
+  error: sessionError,
+} = await supabase.auth.getSession();
+
+if (sessionError || !session) {
+  throw new Error("Please sign in again to use the assistant.");
+}
+
+const response = await fetch("/api/chat", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session.access_token}`,
+  },
+  body: JSON.stringify({
+    message: trimmed,
+    conversationId,
+    messages: updatedMessages.slice(1).slice(-20),
+  }),
+    });
+      
 
       const data = await response.json();
 
