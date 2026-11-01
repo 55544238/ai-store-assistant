@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -44,6 +45,40 @@ export default function LoginPage() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handlePasswordReset() {
+    setError("");
+    setMessage("");
+
+    if (!email.trim()) {
+      setError("Please enter your email address first.");
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      const { error: resetError } =
+        await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+      if (resetError) {
+        setError(resetError.message);
+        return;
+      }
+
+      setMessage(
+        "If an account exists for this email, you will receive a password reset link. Please check your inbox and spam folder."
+      );
+    } catch {
+      setError(
+        "Unable to send the reset email. Please try again."
+      );
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -132,6 +167,17 @@ export default function LoginPage() {
                 placeholder="Enter your password"
                 className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-black focus:ring-2 focus:ring-slate-200"
               />
+
+              <div className="mt-2 text-right">
+                <button
+                  type="button"
+                  onClick={handlePasswordReset}
+                  disabled={resetLoading}
+                  className="text-sm font-semibold text-slate-700 underline underline-offset-4 hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {resetLoading ? "Sending reset link..." : "Forgot password?"}
+                </button>
+              </div>
             </div>
 
             <button
