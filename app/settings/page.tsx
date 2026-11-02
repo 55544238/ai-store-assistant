@@ -6,8 +6,6 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 
-const STORE_ID = "138ee5b7-d235-4cfa-b620-8adcfb8b5838";
-
 type StoreSettings = {
   name: string;
   instagram_username: string;
@@ -88,68 +86,152 @@ export default function SettingsPage() {
 
   const [settings, setSettings] =
     useState<StoreSettings>(EMPTY_SETTINGS);
+
+  const [storeId, setStoreId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadSettings() {
       setLoading(true);
       setError("");
 
       try {
+        // Get the currently signed-in user.
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
+
+        if (authError || !authData.user) {
+          if (!cancelled) {
+            setError("Please sign in to access your store settings.");
+          }
+          return;
+        }
+
+        // Find the store connected to this user.
+        const { data: membership, error: membershipError } =
+          await supabase
+            .from("store_members")
+            .select("store_id")
+            .eq("user_id", authData.user.id)
+            .maybeSingle();
+
+        if (membershipError) {
+          console.error(
+            "Store membership lookup failed:",
+            membershipError
+          );
+
+          if (!cancelled) {
+            setError(
+              "We couldn't find your store membership. Please check your account permissions."
+            );
+          }
+          return;
+        }
+
+        if (!membership?.store_id) {
+          if (!cancelled) {
+            setError("No store is linked to your account yet.");
+          }
+          return;
+        }
+
+        const currentStoreId = membership.store_id;
+
+        if (!cancelled) {
+          setStoreId(currentStoreId);
+        }
+
+        // Load the store information.
         const { data, error: loadError } = await supabase
           .from("stores")
           .select("name, instagram_username, currency, description")
-          .eq("id", STORE_ID)
+          .eq("id", currentStoreId)
           .maybeSingle();
 
         if (loadError) {
-          console.error("Could not load store settings:", loadError);
-          setError(
-            "We couldn't load your store information. Please check your connection and access permissions."
+          console.error(
+            "Could not load store settings:",
+            loadError
           );
+
+          if (!cancelled) {
+            setError(
+              "We couldn't load your store information. Please check your connection and access permissions."
+            );
+          }
           return;
         }
 
         if (!data) {
-          setError(
-            "Your store wasn't found. Please check the configured store ID and access permissions."
-          );
+          if (!cancelled) {
+            setError(
+              "Your store wasn't found or your account cannot access it."
+            );
+          }
           return;
         }
 
-        setSettings({
-          name: data.name ?? "",
-          instagram_username: data.instagram_username ?? "",
-          currency: data.currency ?? "USD",
-          description: data.description ?? "",
-        });
+        if (!cancelled) {
+          setSettings({
+            name: data.name ?? "",
+            instagram_username: data.instagram_username ?? "",
+            currency: data.currency ?? "USD",
+            description: data.description ?? "",
+          });
+        }
       } catch (err) {
         console.error("Unexpected settings loading error:", err);
-        setError("Something went wrong while loading your store settings.");
+
+        if (!cancelled) {
+          setError(
+            "Something went wrong while loading your store settings."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     void loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function updateField(field: keyof StoreSettings, value: string) {
-    setSettings((current) => ({ ...current, [field]: value }));
+    setSettings((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
     setSuccess("");
     setError("");
   }
 
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     setError("");
     setSuccess("");
 
     if (!settings.name.trim()) {
       setError("Please enter your store name.");
+      return;
+    }
+
+    if (!storeId) {
+      setError(
+        "Your store hasn't loaded yet. Please refresh the page."
+      );
       return;
     }
 
@@ -161,17 +243,22 @@ export default function SettingsPage() {
         .update({
           name: settings.name.trim(),
           instagram_username:
-            settings.instagram_username.trim().replace(/^@+/, "") || null,
+            settings.instagram_username.trim().replace(/^@+/, "") ||
+            null,
           currency: settings.currency,
           description: settings.description.trim() || null,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", STORE_ID)
+        .eq("id", storeId)
         .select("id")
         .maybeSingle();
 
       if (saveError) {
-        console.error("Could not save store settings:", saveError);
+        console.error(
+          "Could not save store settings:",
+          saveError
+        );
+
         setError(
           "Your changes couldn't be saved. Please check your Supabase permissions and try again."
         );
@@ -224,6 +311,7 @@ export default function SettingsPage() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--foreground)] text-[var(--background)] shadow-sm">
               <SectionIcon type="ai" />
             </div>
+
             <div className="min-w-0">
               <p className="truncate text-sm font-bold tracking-tight">
                 AI Store Assistant
@@ -256,7 +344,9 @@ export default function SettingsPage() {
 
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-10 lg:px-8">
         <div className="mb-8">
-          <div className={`mb-3 flex items-center gap-2 text-xs font-semibold ${mutedTextClass}`}>
+          <div
+            className={`mb-3 flex items-center gap-2 text-xs font-semibold ${mutedTextClass}`}
+          >
             <button
               type="button"
               onClick={() => router.push("/")}
@@ -273,13 +363,17 @@ export default function SettingsPage() {
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
                 Settings
               </h1>
-              <p className={`mt-2 max-w-2xl text-sm leading-6 sm:text-base ${mutedTextClass}`}>
+              <p
+                className={`mt-2 max-w-2xl text-sm leading-6 sm:text-base ${mutedTextClass}`}
+              >
                 Manage your store profile, social channels, and AI assistant
                 setup from one place.
               </p>
             </div>
 
-            <div className={`inline-flex w-fit items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium shadow-sm ${mutedTextClass}`}>
+            <div
+              className={`inline-flex w-fit items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium shadow-sm ${mutedTextClass}`}
+            >
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Settings workspace
             </div>
@@ -294,6 +388,7 @@ export default function SettingsPage() {
             <SectionIcon type="store" />
             Store profile
           </a>
+
           <a
             href="#social-connections"
             className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--surface-secondary)] hover:text-[var(--foreground)] ${mutedTextClass}`}
@@ -301,6 +396,7 @@ export default function SettingsPage() {
             <SectionIcon type="instagram" />
             Connections
           </a>
+
           <a
             href="#ai-assistant"
             className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--surface-secondary)] hover:text-[var(--foreground)] ${mutedTextClass}`}
@@ -338,6 +434,7 @@ export default function SettingsPage() {
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-secondary)] text-[var(--foreground)]">
                     <SectionIcon type="store" />
                   </div>
+
                   <div>
                     <h2 className={headingClass}>Store profile</h2>
                     <p className={`mt-1 text-sm ${mutedTextClass}`}>
@@ -357,6 +454,7 @@ export default function SettingsPage() {
                           <div className="h-12 rounded-xl bg-[var(--surface-secondary)]" />
                         </div>
                       ))}
+
                       <p className={`text-sm ${mutedTextClass}`}>
                         Loading your store information...
                       </p>
@@ -367,28 +465,39 @@ export default function SettingsPage() {
                         <label htmlFor="store-name" className={labelClass}>
                           Store name <span className="text-red-500">*</span>
                         </label>
+
                         <input
                           id="store-name"
                           value={settings.name}
-                          onChange={(e) => updateField("name", e.target.value)}
+                          onChange={(e) =>
+                            updateField("name", e.target.value)
+                          }
                           required
                           maxLength={100}
                           className={inputClass}
                           placeholder="My Fashion Store"
                         />
+
                         <p className={`mt-2 text-xs ${mutedTextClass}`}>
                           Use the name customers recognize.
                         </p>
                       </div>
 
                       <div>
-                        <label htmlFor="instagram-username" className={labelClass}>
+                        <label
+                          htmlFor="instagram-username"
+                          className={labelClass}
+                        >
                           Instagram username
                         </label>
+
                         <div className="flex items-center rounded-xl border border-[var(--border)] focus-within:border-[var(--accent)] focus-within:ring-4 focus-within:ring-[var(--accent)]/10">
-                          <span className={`pl-4 text-sm font-medium ${mutedTextClass}`}>
+                          <span
+                            className={`pl-4 text-sm font-medium ${mutedTextClass}`}
+                          >
                             @
                           </span>
+
                           <input
                             id="instagram-username"
                             value={settings.instagram_username}
@@ -403,7 +512,10 @@ export default function SettingsPage() {
                             placeholder="yourstore"
                           />
                         </div>
-                        <p className={`mt-2 text-xs leading-5 ${mutedTextClass}`}>
+
+                        <p
+                          className={`mt-2 text-xs leading-5 ${mutedTextClass}`}
+                        >
                           This saves the username only. It does not connect
                           your Instagram account or authorize messaging.
                         </p>
@@ -413,10 +525,13 @@ export default function SettingsPage() {
                         <label htmlFor="currency" className={labelClass}>
                           Default currency
                         </label>
+
                         <select
                           id="currency"
                           value={settings.currency}
-                          onChange={(e) => updateField("currency", e.target.value)}
+                          onChange={(e) =>
+                            updateField("currency", e.target.value)
+                          }
                           className={inputClass}
                         >
                           <option value="USD">USD — US Dollar</option>
@@ -424,6 +539,7 @@ export default function SettingsPage() {
                           <option value="GBP">GBP — British Pound</option>
                           <option value="EUR">EUR — Euro</option>
                         </select>
+
                         <p className={`mt-2 text-xs ${mutedTextClass}`}>
                           Choose the currency you use for your store.
                         </p>
@@ -431,24 +547,33 @@ export default function SettingsPage() {
 
                       <div>
                         <div className="mb-2 flex items-center justify-between gap-3">
-                          <label htmlFor="description" className={labelClass.replace("mb-2 ", "")}>
+                          <label
+                            htmlFor="description"
+                            className={labelClass.replace("mb-2 ", "")}
+                          >
                             Store description
                           </label>
+
                           <span className={`text-xs ${mutedTextClass}`}>
                             {settings.description.length}/1000
                           </span>
                         </div>
+
                         <textarea
                           id="description"
                           value={settings.description}
-                          onChange={(e) => updateField("description", e.target.value)}
+                          onChange={(e) =>
+                            updateField("description", e.target.value)
+                          }
                           rows={4}
                           maxLength={1000}
                           className={`${inputClass} resize-y leading-6`}
                           placeholder="Tell customers about your clothing, shoes, and accessories..."
                         />
+
                         <p className={`mt-2 text-xs ${mutedTextClass}`}>
-                          A short description helps explain what your store offers.
+                          A short description helps explain what your store
+                          offers.
                         </p>
                       </div>
                     </>
@@ -459,9 +584,10 @@ export default function SettingsPage() {
                   <p className={`text-sm ${mutedTextClass}`}>
                     Your changes are saved to your store in Supabase.
                   </p>
+
                   <button
                     type="submit"
-                    disabled={saving || loading}
+                    disabled={saving || loading || !storeId}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--foreground)] px-5 py-3 text-sm font-semibold text-[var(--background)] shadow-sm transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {saving ? (
@@ -471,7 +597,11 @@ export default function SettingsPage() {
                       </>
                     ) : (
                       <>
-                        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          className="h-4 w-4"
+                        >
                           <path
                             d="M5 3h12l4 4v14H3V3h2ZM7 3v6h10V3M7 21v-7h10v7"
                             stroke="currentColor"
@@ -496,7 +626,10 @@ export default function SettingsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className={headingClass}>AI assistant</h2>
-                    <span className={`rounded-full border border-[var(--border)] bg-[var(--surface-secondary)] px-2.5 py-1 text-[11px] font-semibold ${mutedTextClass}`}>
+
+                    <span
+                      className={`rounded-full border border-[var(--border)] bg-[var(--surface-secondary)] px-2.5 py-1 text-[11px] font-semibold ${mutedTextClass}`}
+                    >
                       Catalog enabled
                     </span>
                   </div>
@@ -514,6 +647,7 @@ export default function SettingsPage() {
                       </p>
                       <p className="mt-1.5 text-sm font-bold">Groq</p>
                     </div>
+
                     <div className={secondaryPanelClass + " p-4"}>
                       <p className={`text-xs font-medium ${mutedTextClass}`}>
                         Product data
@@ -533,7 +667,11 @@ export default function SettingsPage() {
                     className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--surface-secondary)]"
                   >
                     Open AI chat
-                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="h-4 w-4"
+                    >
                       <path
                         d="M5 12h14m-6-6 6 6-6 6"
                         stroke="currentColor"
@@ -555,6 +693,7 @@ export default function SettingsPage() {
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-100 via-pink-100 to-orange-100 text-pink-700">
                     <SectionIcon type="instagram" />
                   </div>
+
                   <div>
                     <h2 className={headingClass}>Social connections</h2>
                     <p className={`mt-1 text-xs ${mutedTextClass}`}>
@@ -567,11 +706,14 @@ export default function SettingsPage() {
               <div className="p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-bold">Instagram Messaging</p>
+                    <p className="text-sm font-bold">
+                      Instagram Messaging
+                    </p>
                     <p className={`mt-1 text-xs ${mutedTextClass}`}>
                       AI replies to customer DMs
                     </p>
                   </div>
+
                   <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                     Needs testing
@@ -599,6 +741,7 @@ export default function SettingsPage() {
                         strokeLinecap="round"
                       />
                     </svg>
+
                     <div>
                       <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
                         Connection not confirmed
@@ -612,9 +755,12 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="mt-5">
-                  <p className={`mb-3 text-xs font-bold uppercase tracking-wider ${mutedTextClass}`}>
+                  <p
+                    className={`mb-3 text-xs font-bold uppercase tracking-wider ${mutedTextClass}`}
+                  >
                     Before going live
                   </p>
+
                   <ul className="space-y-3">
                     {[
                       "Keep your app server and public webhook running.",
@@ -623,10 +769,15 @@ export default function SettingsPage() {
                       "Confirm messaging permissions and access token.",
                     ].map((item) => (
                       <li key={item} className="flex items-start gap-2.5">
-                        <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[var(--border)] text-[10px] ${mutedTextClass}`}>
+                        <span
+                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[var(--border)] text-[10px] ${mutedTextClass}`}
+                        >
                           ✓
                         </span>
-                        <span className={`text-xs leading-5 ${mutedTextClass}`}>
+
+                        <span
+                          className={`text-xs leading-5 ${mutedTextClass}`}
+                        >
                           {item}
                         </span>
                       </li>
@@ -640,7 +791,11 @@ export default function SettingsPage() {
                   className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--foreground)] px-4 py-3 text-sm font-semibold text-[var(--background)] transition hover:opacity-80"
                 >
                   Return to dashboard
-                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-4 w-4"
+                  >
                     <path
                       d="M5 12h14m-6-6 6 6-6 6"
                       stroke="currentColor"
@@ -656,7 +811,11 @@ export default function SettingsPage() {
             <section className={cardClass + " p-5 sm:p-6"}>
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-300">
-                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-5 w-5"
+                  >
                     <path
                       d="M12 3v2m0 14v2M3 12h2m14 0h2M5.64 5.64l1.42 1.42m9.88 9.88 1.42 1.42m0-12.72-1.42 1.42m-9.88 9.88-1.42 1.42"
                       stroke="currentColor"
@@ -672,15 +831,18 @@ export default function SettingsPage() {
                     />
                   </svg>
                 </div>
+
                 <h3 className="text-sm font-bold">
                   Keep your catalog updated
                 </h3>
               </div>
+
               <p className={`mt-3 text-sm leading-6 ${mutedTextClass}`}>
                 Your AI assistant relies on product data to answer customers
                 accurately. Update stock, prices, sizes, and colors whenever
                 they change.
               </p>
+
               <button
                 type="button"
                 onClick={() => router.push("/products")}
@@ -692,7 +854,9 @@ export default function SettingsPage() {
           </aside>
         </div>
 
-        <footer className={`mt-10 border-t border-[var(--border)] pt-6 text-center text-xs ${mutedTextClass}`}>
+        <footer
+          className={`mt-10 border-t border-[var(--border)] pt-6 text-center text-xs ${mutedTextClass}`}
+        >
           AI Store Assistant · Store settings
         </footer>
       </main>
