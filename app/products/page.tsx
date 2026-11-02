@@ -50,7 +50,6 @@ export default function ProductsPage() {
       setError("");
 
       try {
-        // Get the currently signed-in user.
         const {
           data: { user },
           error: userError,
@@ -62,7 +61,6 @@ export default function ProductsPage() {
           throw new Error("Please sign in to view your products.");
         }
 
-        // Find this user's store.
         const { data: membership, error: membershipError } =
           await supabase
             .from("store_members")
@@ -78,7 +76,6 @@ export default function ProductsPage() {
           );
         }
 
-        // Load only products belonging to this user's store.
         const { data: productData, error: productError } =
           await supabase
             .from("products")
@@ -164,18 +161,18 @@ export default function ProductsPage() {
       } catch (err: unknown) {
         console.error("Load products error:", err);
 
-        const errorMessage =
+        const message =
           err instanceof Error
             ? err.message
             : "An unexpected error occurred.";
 
-        if (!cancelled) setError(errorMessage);
+        if (!cancelled) setError(message);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    loadProducts();
+    void loadProducts();
 
     return () => {
       cancelled = true;
@@ -201,47 +198,94 @@ export default function ProductsPage() {
     return matchesSearch && matchesCategory;
   });
 
+  const activeCount = products.filter(
+    (product) => product.status === "Active"
+  ).length;
+
+  const lowStockCount = products.filter(
+    (product) => product.stock > 0 && product.stock < 5
+  ).length;
+
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+    <main className="min-h-screen bg-[#f7f8fa] text-slate-900 dark:bg-black dark:text-white">
+      <header className="border-b border-slate-200 bg-white dark:border-white/10 dark:bg-black">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Link
               href="/"
-              className="mb-3 inline-flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="mb-4 inline-flex items-center rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
             >
               ← Back to Dashboard
             </Link>
 
-            <h1 className="text-2xl font-bold">Products</h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <h1 className="text-3xl font-bold tracking-tight">
+              Products
+            </h1>
+
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
               Manage your products, prices, and inventory.
             </p>
           </div>
 
           <Link
             href="/products/new"
-            className="rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+            className="inline-flex items-center justify-center rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-slate-200"
           >
-            + Add Product
+            <span className="mr-2 text-lg">+</span>
+            Add Product
           </Link>
         </div>
       </header>
 
       <section className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <input
-            type="text"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search products..."
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none placeholder:text-slate-400 sm:w-80"
-          />
+        <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#111111]">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Total products
+            </p>
+            <p className="mt-2 text-3xl font-bold">
+              {loading ? "—" : products.length}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#111111]">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Active products
+            </p>
+            <p className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
+              {loading ? "—" : activeCount}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#111111]">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Low stock products
+            </p>
+            <p className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
+              {loading ? "—" : lowStockCount}
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-md">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+              ⌕
+            </span>
+
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search products..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-slate-400 dark:border-white/10 dark:bg-[#111111] dark:text-white dark:placeholder:text-slate-500 dark:focus:border-white/30"
+            />
+          </div>
 
           <select
             value={categoryFilter}
             onChange={(event) => setCategoryFilter(event.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none dark:border-white/10 dark:bg-[#111111] dark:text-white"
           >
             {categories.map((category) => (
               <option key={category} value={category}>
@@ -251,128 +295,162 @@ export default function ProductsPage() {
           </select>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  <th className="px-6 py-4">Product</th>
-                  <th className="px-6 py-4">Category</th>
-                  <th className="px-6 py-4">Price</th>
-                  <th className="px-6 py-4">Stock</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Action</th>
-                </tr>
-              </thead>
+        {loading ? (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                key={index}
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-[#111111]"
+              >
+                <div className="aspect-[4/3] animate-pulse bg-slate-100 dark:bg-white/5" />
+                <div className="space-y-3 p-5">
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100 dark:bg-white/10" />
+                  <div className="h-3 w-1/2 animate-pulse rounded bg-slate-100 dark:bg-white/10" />
+                  <div className="h-8 w-full animate-pulse rounded bg-slate-100 dark:bg-white/10" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-500/20 dark:bg-red-500/5">
+            <p className="font-semibold text-red-700 dark:text-red-400">
+              Could not load products
+            </p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-300">
+              {error}
+            </p>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-white/15 dark:bg-[#111111]">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl dark:bg-white/5">
+              📦
+            </div>
 
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-500">
-                      Loading products...
-                    </td>
-                  </tr>
-                ) : error ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-sm text-red-600">
-                      Could not load products: {error}
-                    </td>
-                  </tr>
-                ) : filteredProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-500">
-                      {products.length === 0
-                        ? "No products yet. Add your first product."
-                        : "No products match your search."}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredProducts.map((product) => (
-                    <tr
-                      key={product.id}
-                      className="border-b border-slate-100 last:border-0"
+            <h2 className="mt-5 text-lg font-semibold">
+              {products.length === 0
+                ? "Your catalog is waiting"
+                : "No matching products"}
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
+              {products.length === 0
+                ? "Add your first product to start building your store catalog."
+                : "Try another product name or choose a different category."}
+            </p>
+
+            {products.length === 0 && (
+              <Link
+                href="/products/new"
+                className="mt-6 inline-flex rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-slate-200"
+              >
+                + Add your first product
+              </Link>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                Your catalog
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {filteredProducts.length}{" "}
+                {filteredProducts.length === 1 ? "product" : "products"}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredProducts.map((product, index) => (
+                <article
+                  key={product.id}
+                  className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl dark:border-white/10 dark:bg-[#111111] dark:hover:border-white/20"
+                  style={{
+                    animation: "product-card-enter 500ms ease-out both",
+                    animationDelay: `${Math.min(index * 70, 490)}ms`,
+                  }}
+                >
+                  <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-[#1b1b1b]">
+                    {product.image_url ? (
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+                        <span className="text-4xl">📦</span>
+                        <span className="mt-2 text-xs font-medium">
+                          No product photo
+                        </span>
+                      </div>
+                    )}
+
+                    <span
+                      className={`absolute right-3 top-3 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                        product.status === "Active"
+                          ? "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-400"
+                          : product.status === "Out of stock"
+                            ? "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-400"
+                            : "bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-300"
+                      }`}
                     >
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-400">
-                            {product.image_url ? (
-                              <img
-                                src={product.image_url}
-                                alt={product.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-xs">No photo</span>
-                            )}
-                          </div>
+                      {product.status}
+                    </span>
+                  </div>
 
-                          <div>
-                            <p className="font-medium">{product.name}</p>
-                            <p className="text-xs text-slate-400">
-                              Product
-                            </p>
-                          </div>
-                        </div>
-                      </td>
+                  <div className="p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      {product.category}
+                    </p>
 
-                      <td className="px-6 py-5 text-sm text-slate-600">
-                        {product.category}
-                      </td>
+                    <h2 className="mt-2 min-h-12 text-base font-semibold leading-6 text-slate-900 dark:text-white">
+                      {product.name}
+                    </h2>
 
-                      <td className="px-6 py-5 text-sm font-medium">
-                        {product.price}
-                      </td>
+                    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-white/10">
+                      <div>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          Price
+                        </p>
+                        <p className="mt-1 text-lg font-bold">
+                          {product.price}
+                        </p>
+                      </div>
 
-                      <td className="px-6 py-5">
-                        <span
-                          className={
+                      <div className="text-right">
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          Available stock
+                        </p>
+                        <p
+                          className={`mt-1 text-sm font-semibold ${
                             product.stock === 0
-                              ? "text-sm font-medium text-red-600"
+                              ? "text-red-600 dark:text-red-400"
                               : product.stock < 5
-                                ? "text-sm font-medium text-orange-600"
-                                : "text-sm font-medium text-slate-700"
-                          }
+                                ? "text-orange-600 dark:text-orange-400"
+                                : "text-slate-700 dark:text-slate-200"
+                          }`}
                         >
                           {product.stock} units
-                        </span>
-                      </td>
+                        </p>
+                      </div>
+                    </div>
 
-                      <td className="px-6 py-5">
-                        <span
-                          className={
-                            product.status === "Active"
-                              ? "rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700"
-                              : product.status === "Out of stock"
-                                ? "rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700"
-                                : "rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
-                          }
-                        >
-                          {product.status}
-                        </span>
-                      </td>
+                    <Link
+                      href={`/products/edit?id=${product.id}`}
+                      className="mt-5 flex w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-black dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white"
+                    >
+                      Edit product →
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
 
-                      <td className="px-6 py-5">
-                        <button
-                          type="button"
-                          className="cursor-pointer text-sm font-medium text-slate-600 hover:text-black"
-                          onClick={() => {
-                            window.location.href = `/products/edit?id=${product.id}`;
-                          }}
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="flex gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-500">
+        <div className="mt-10 rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#111111]">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-600 dark:bg-white/10 dark:text-white">
               AI
             </div>
 
@@ -380,7 +458,7 @@ export default function ProductsPage() {
               <h2 className="font-semibold">
                 Your AI will use these products
               </h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
                 Every product you add here becomes part of your store
                 catalog. The AI assistant will use the catalog to
                 answer customer questions about prices, sizes, colors,
@@ -390,6 +468,26 @@ export default function ProductsPage() {
           </div>
         </div>
       </section>
+
+      <style jsx global>{`
+        @keyframes product-card-enter {
+          from {
+            opacity: 0;
+            transform: translateY(14px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          article {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }
