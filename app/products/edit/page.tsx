@@ -6,7 +6,6 @@ import type { FormEvent, ChangeEvent } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 
-const STORE_ID = "138ee5b7-d235-4cfa-b620-8adcfb8b5838";
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 type Product = {
@@ -34,6 +33,8 @@ function EditProductContent() {
 
   const [product, setProduct] = useState<Product | null>(null);
   const [variant, setVariant] = useState<Variant | null>(null);
+  const [storeId, setStoreId] = useState<string | null>(null);
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
@@ -50,10 +51,13 @@ function EditProductContent() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadProduct() {
       if (!productId) {
         setMessage("No product was selected.");
@@ -61,75 +65,132 @@ function EditProductContent() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, name, description, category, price, status")
-        .eq("id", productId)
-        .eq("store_id", STORE_ID)
-        .single();
+      try {
+        // Get the signed-in user.
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
 
-      if (error || !data) {
-        setMessage(error?.message || "Product not found.");
+        if (cancelled) return;
+
+        if (authError || !authData.user) {
+          setMessage("Please sign in to edit this product.");
+          setLoading(false);
+          return;
+        }
+
+        // Find the signed-in user's store.
+        const { data: membership, error: membershipError } = await supabase
+          .from("store_members")
+          .select("store_id")
+          .eq("user_id", authData.user.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (membershipError || !membership) {
+          setMessage(
+            membershipError?.message ||
+              "Your account does not have a store membership."
+          );
+          setLoading(false);
+          return;
+        }
+
+        const currentStoreId = membership.store_id;
+        setStoreId(currentStoreId);
+
+        // Load only a product belonging to this user's store.
+        const { data, error } = await supabase
+          .from("products")
+          .select("id, name, description, category, price, status")
+          .eq("id", productId)
+          .eq("store_id", currentStoreId)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (error || !data) {
+          setMessage(error?.message || "Product not found in your store.");
+          setLoading(false);
+          return;
+        }
+
+        const foundProduct = data as Product;
+
+        setProduct(foundProduct);
+        setName(foundProduct.name || "");
+        setDescription(foundProduct.description || "");
+        setCategory(foundProduct.category || "");
+        setStatus(foundProduct.status || "active");
+
+        // Load the product's variant.
+        const { data: variants, error: variantError } = await supabase
+          .from("product_variants")
+          .select("id, size, color, sku, stock_quantity, price_override")
+          .eq("product_id", productId)
+          .limit(1);
+
+        if (cancelled) return;
+
+        if (variantError) {
+          setMessage(variantError.message);
+          setLoading(false);
+          return;
+        }
+
+        const foundVariant = (variants?.[0] as Variant | undefined) || null;
+
+        setVariant(foundVariant);
+
+        if (foundVariant) {
+          setPrice(
+            String(foundVariant.price_override ?? foundProduct.price ?? "")
+          );
+          setSize(foundVariant.size || "");
+          setColor(foundVariant.color || "");
+          setSku(foundVariant.sku || "");
+          setStock(String(foundVariant.stock_quantity ?? 1));
+        } else {
+          setPrice(String(foundProduct.price ?? ""));
+        }
+
+        // Load the product image.
+        const { data: images, error: imageError } = await supabase
+          .from("product_images")
+          .select("id, image_url, sort_order")
+          .eq("product_id", productId)
+          .order("sort_order", { ascending: true })
+          .limit(1);
+
+        if (cancelled) return;
+
+        if (imageError) {
+          setMessage(
+            `Product loaded, but its image could not be loaded: ${imageError.message}`
+          );
+        } else if (images && images.length > 0) {
+          setImageId(images[0].id);
+          setCurrentImageUrl(images[0].image_url);
+        }
+
         setLoading(false);
-        return;
-      }
+      } catch (error) {
+        if (cancelled) return;
 
-      const foundProduct = data as Product;
-
-      setProduct(foundProduct);
-      setName(foundProduct.name || "");
-      setDescription(foundProduct.description || "");
-      setCategory(foundProduct.category || "");
-      setStatus(foundProduct.status || "active");
-
-      const { data: variants, error: variantError } = await supabase
-        .from("product_variants")
-        .select("id, size, color, sku, stock_quantity, price_override")
-        .eq("product_id", productId)
-        .limit(1);
-
-      if (variantError) {
-        setMessage(variantError.message);
-        setLoading(false);
-        return;
-      }
-
-      const foundVariant = (variants?.[0] as Variant | undefined) || null;
-
-      setVariant(foundVariant);
-
-      if (foundVariant) {
-        setPrice(
-          String(foundVariant.price_override ?? foundProduct.price ?? "")
-        );
-        setSize(foundVariant.size || "");
-        setColor(foundVariant.color || "");
-        setSku(foundVariant.sku || "");
-        setStock(String(foundVariant.stock_quantity ?? 1));
-      } else {
-        setPrice(String(foundProduct.price ?? ""));
-      }
-
-      const { data: images, error: imageError } = await supabase
-        .from("product_images")
-        .select("id, image_url, sort_order")
-        .eq("product_id", productId)
-        .order("sort_order", { ascending: true })
-        .limit(1);
-
-      if (imageError) {
         setMessage(
-          `Product loaded, but its image could not be loaded: ${imageError.message}`
+          error instanceof Error
+            ? error.message
+            : "Could not load this product."
         );
-      } else if (images && images.length > 0) {
-        setImageId(images[0].id);
-        setCurrentImageUrl(images[0].image_url);
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
     loadProduct();
+
+    return () => {
+      cancelled = true;
+    };
   }, [productId]);
 
   useEffect(() => {
@@ -165,11 +226,11 @@ function EditProductContent() {
     setSelectedImage(file);
   }
 
-  async function saveProductImage(): Promise<string | null> {
-    if (!product || !selectedImage) return null;
+  async function saveProductImage(): Promise<void> {
+    if (!product || !storeId || !selectedImage) return;
 
     const safeName = selectedImage.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-    const filePath = `${STORE_ID}/${product.id}/${Date.now()}-${safeName}`;
+    const filePath = `${storeId}/${product.id}/${Date.now()}-${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("product-images")
@@ -221,14 +282,12 @@ function EditProductContent() {
 
     setCurrentImageUrl(imageUrl);
     setSelectedImage(null);
-
-    return imageUrl;
   }
 
   async function saveChanges(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!product) return;
+    if (!product || !storeId || saving || deleting) return;
 
     const numericPrice = Number(price);
     const numericStock = Number(stock);
@@ -258,10 +317,11 @@ function EditProductContent() {
           name: name.trim(),
           description: description.trim() || null,
           category: category.trim() || null,
+          price: numericPrice,
           status,
         })
         .eq("id", product.id)
-        .eq("store_id", STORE_ID);
+        .eq("store_id", storeId);
 
       if (productError) throw productError;
 
@@ -276,7 +336,8 @@ function EditProductContent() {
             stock_quantity: numericStock,
             status,
           })
-          .eq("id", variant.id);
+          .eq("id", variant.id)
+          .eq("product_id", product.id);
 
         if (variantError) throw variantError;
       } else {
@@ -300,7 +361,6 @@ function EditProductContent() {
       }
 
       setMessage("Product updated successfully!");
-      setSaving(false);
 
       window.setTimeout(() => router.push("/products"), 1000);
     } catch (error) {
@@ -309,52 +369,41 @@ function EditProductContent() {
           ? error.message
           : "Something went wrong while saving the product."
       );
+    } finally {
       setSaving(false);
     }
   }
 
-
   async function deleteProduct() {
-if (!product || deleting || saving) return;
+    if (!product || !storeId || deleting || saving) return;
 
-const confirmed = window.confirm(
-  `Are you sure you want to delete "${product.name}"? This action cannot be undone.`
-);
-
-if (!confirmed) return;
-
-setDeleting(true);
-setMessage("");
-
-try {
-  const { error } = await supabase
-    .from("products")
-    .delete()
-    .eq("id", product.id)
-    .eq("store_id", STORE_ID);
-
-  if (error) throw error;
-
-  router.push("/products");
-} catch (error) {
-  setMessage(
-    error instanceof Error
-      ? error.message
-      : "Could not delete this product."
-  );
-  setDeleting(false);
-}
-
-
-}
-
-
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-slate-50 p-8 text-slate-600">
-        Loading product...
-      </main>
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${product.name}"? This action cannot be undone.`
     );
+
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setMessage("");
+
+    try {
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", product.id)
+        .eq("store_id", storeId);
+
+      if (error) throw error;
+
+      router.push("/products");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not delete this product."
+      );
+      setDeleting(false);
+    }
   }
 
   if (loading) {
@@ -371,7 +420,7 @@ try {
         <button
           type="button"
           onClick={() => router.push("/products")}
-          className="mb-5 text-sm text-slate-500 hover:text-black"
+          className="mb-5 cursor-pointer text-sm text-slate-500 transition-colors hover:text-black"
         >
           ← Back to products
         </button>
@@ -401,7 +450,7 @@ try {
                 <img
                   src={previewUrl || currentImageUrl || ""}
                   alt={name || "Product image"}
-                  className="mb-3 h-56 w-full rounded-xl border border-slate-200 object-contain bg-slate-50"
+                  className="mb-3 h-56 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain"
                 />
               ) : (
                 <div className="mb-3 flex h-44 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
@@ -411,10 +460,12 @@ try {
 
               <label
                 htmlFor="product-image"
-                className="block cursor-pointer rounded-xl border border-slate-300 px-4 py-4 text-center text-sm hover:bg-slate-50"
+                className="block cursor-pointer rounded-xl border border-slate-300 px-4 py-4 text-center text-sm transition-colors hover:bg-slate-50"
               >
                 <span className="font-medium">
-                  {selectedImage ? "Choose a different image" : "Choose or replace image"}
+                  {selectedImage
+                    ? "Choose a different image"
+                    : "Choose or replace image"}
                 </span>
                 <span className="mt-1 block text-slate-500">
                   JPG, PNG, or WEBP · Maximum 5 MB
@@ -437,7 +488,7 @@ try {
                   <button
                     type="button"
                     onClick={() => setSelectedImage(null)}
-                    className="shrink-0 text-red-600 hover:text-red-800"
+                    className="shrink-0 cursor-pointer text-red-600 transition-colors hover:text-red-800"
                   >
                     Cancel
                   </button>
@@ -453,7 +504,7 @@ try {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
             </div>
 
@@ -464,7 +515,7 @@ try {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
                 rows={3}
               />
             </div>
@@ -477,7 +528,7 @@ try {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="e.g. Shoes"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
             </div>
 
@@ -490,7 +541,7 @@ try {
                 step="0.01"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
             </div>
 
@@ -501,7 +552,7 @@ try {
                   value={size}
                   onChange={(e) => setSize(e.target.value)}
                   placeholder="e.g. 42 or M"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
                 />
               </div>
 
@@ -511,7 +562,7 @@ try {
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                   placeholder="e.g. Black"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
                 />
               </div>
             </div>
@@ -521,7 +572,7 @@ try {
               <input
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
             </div>
 
@@ -536,7 +587,7 @@ try {
                 step="1"
                 value={stock}
                 onChange={(e) => setStock(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
             </div>
 
@@ -545,34 +596,31 @@ try {
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                className="w-full cursor-pointer rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-400"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </div>
 
-            ```
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <button
-            disabled={saving || deleting}
-            type="submit"
-            className="w-full rounded-xl bg-black px-5 py-3 font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {saving ? "Saving changes..." : "Save changes"}
-          </button>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                disabled={saving || deleting}
+                type="submit"
+                className="w-full cursor-pointer rounded-xl bg-black px-5 py-3 font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Saving changes..." : "Save changes"}
+              </button>
 
-          <button
-            disabled={saving || deleting}
-            type="button"
-            onClick={deleteProduct}
-            className="w-full rounded-xl bg-red-600 px-5 py-3 font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleting ? "Deleting..." : "Delete product"}
-          </button>
-        </div>
-```
-
+              <button
+                disabled={saving || deleting}
+                type="button"
+                onClick={deleteProduct}
+                className="w-full cursor-pointer rounded-xl bg-red-600 px-5 py-3 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete product"}
+              </button>
+            </div>
           </form>
         )}
       </div>
