@@ -189,6 +189,9 @@ export default function NewProductPage() {
 
       // 7. Success
       setMessage("Product added successfully.");
+      setTimeout(() => {
+  window.location.href = "/products";
+}, 1000);
 
       setName("");
       setDescription("");
