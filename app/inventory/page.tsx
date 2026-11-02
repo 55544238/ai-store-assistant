@@ -340,7 +340,10 @@ export default function InventoryPage() {
                       <p className={`text-sm font-medium ${card.text}`}>
                         {card.label}
                       </p>
-                      <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                     <p
+  className="mt-3 text-3xl font-bold tracking-tight"
+  style={{ color: "var(--foreground)" }}
+>
                         <AnimatedNumber
                           value={card.value}
                           active={chartReady}
