@@ -36,7 +36,6 @@ function AnimatedNumber({
       return;
     }
 
-    let frame = 0;
     let animationFrame = 0;
     const duration = 900;
     let startTime: number | null = null;
@@ -44,7 +43,11 @@ function AnimatedNumber({
     function animate(timestamp: number) {
       if (startTime === null) startTime = timestamp;
 
-      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const progress = Math.min(
+        (timestamp - startTime) / duration,
+        1
+      );
+
       const eased = 1 - Math.pow(1 - progress, 3);
 
       setDisplayValue(Math.round(value * eased));
@@ -87,19 +90,24 @@ export default function InventoryPage() {
         if (userError) throw userError;
 
         if (!user) {
-          throw new Error("Please log in again to view your inventory.");
+          throw new Error(
+            "Please log in again to view your inventory."
+          );
         }
 
-        const { data: membership, error: membershipError } = await supabase
-          .from("store_members")
-          .select("store_id")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const { data: membership, error: membershipError } =
+          await supabase
+            .from("store_members")
+            .select("store_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
 
         if (membershipError) throw membershipError;
 
         if (!membership?.store_id) {
-          throw new Error("No store is connected to this account.");
+          throw new Error(
+            "No store is connected to this account."
+          );
         }
 
         const { data, error: queryError } = await supabase
@@ -115,7 +123,6 @@ export default function InventoryPage() {
         if (!cancelled) {
           setProducts((data ?? []) as Product[]);
 
-          // Start the animations after the inventory has rendered.
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               if (!cancelled) setChartReady(true);
@@ -154,7 +161,8 @@ export default function InventoryPage() {
   );
 
   const totalUnits = variants.reduce(
-    (sum, variant) => sum + Math.max(0, variant.stock_quantity ?? 0),
+    (sum, variant) =>
+      sum + Math.max(0, variant.stock_quantity ?? 0),
     0
   );
 
@@ -176,36 +184,36 @@ export default function InventoryPage() {
       label: "Total Units",
       value: totalUnits,
       icon: "📦",
-      color: "bg-blue-50",
-      iconBg: "bg-blue-100",
-      text: "text-blue-700",
+      color: "bg-blue-50 dark:bg-slate-800",
+      iconBg: "bg-blue-100 dark:bg-slate-700",
+      text: "text-blue-700 dark:text-blue-300",
       description: "Physical units in stock",
     },
     {
       label: "In Stock",
       value: inStock,
       icon: "✅",
-      color: "bg-emerald-50",
-      iconBg: "bg-emerald-100",
-      text: "text-emerald-700",
+      color: "bg-emerald-50 dark:bg-slate-800",
+      iconBg: "bg-emerald-100 dark:bg-slate-700",
+      text: "text-emerald-700 dark:text-emerald-300",
       description: "Variants with 4+ units",
     },
     {
       label: "Low Stock",
       value: lowStock,
       icon: "⚠️",
-      color: "bg-amber-50",
-      iconBg: "bg-amber-100",
-      text: "text-amber-700",
+      color: "bg-amber-50 dark:bg-slate-800",
+      iconBg: "bg-amber-100 dark:bg-slate-700",
+      text: "text-amber-700 dark:text-amber-300",
       description: "Variants with 1–3 units",
     },
     {
       label: "Out of Stock",
       value: outOfStock,
       icon: "🚫",
-      color: "bg-rose-50",
-      iconBg: "bg-rose-100",
-      text: "text-rose-700",
+      color: "bg-rose-50 dark:bg-slate-800",
+      iconBg: "bg-rose-100 dark:bg-slate-700",
+      text: "text-rose-700 dark:text-rose-300",
       description: "Variants with zero units",
     },
   ];
@@ -214,20 +222,27 @@ export default function InventoryPage() {
     1,
     ...products.map((product) =>
       (product.product_variants ?? []).reduce(
-        (sum, variant) => sum + Math.max(0, variant.stock_quantity ?? 0),
+        (sum, variant) =>
+          sum + Math.max(0, variant.stock_quantity ?? 0),
         0
       )
     )
   );
 
   const inStockPercent =
-    variants.length > 0 ? (inStock / variants.length) * 100 : 0;
+    variants.length > 0
+      ? (inStock / variants.length) * 100
+      : 0;
 
   const lowStockPercent =
-    variants.length > 0 ? (lowStock / variants.length) * 100 : 0;
+    variants.length > 0
+      ? (lowStock / variants.length) * 100
+      : 0;
 
   const outOfStockPercent =
-    variants.length > 0 ? (outOfStock / variants.length) * 100 : 0;
+    variants.length > 0
+      ? (outOfStock / variants.length) * 100
+      : 0;
 
   const inStockAngle = (inStockPercent / 100) * 360;
   const lowStockAngle = (lowStockPercent / 100) * 360;
@@ -290,7 +305,8 @@ export default function InventoryPage() {
             </h1>
 
             <p className="mt-1 text-sm text-slate-500">
-              Monitor your fashion products, stock levels and restocking needs.
+              Monitor your fashion products, stock levels and
+              restocking needs.
             </p>
           </div>
 
@@ -332,18 +348,25 @@ export default function InventoryPage() {
               {stockCards.map((card, index) => (
                 <article
                   key={card.label}
-                  style={{ animationDelay: `${index * 100}ms` }}
+                  style={{
+                    animationDelay: `${index * 100}ms`,
+                  }}
                   className={`animate-[inventory-enter_650ms_ease-out_both] rounded-2xl border border-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${card.color}`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className={`text-sm font-medium ${card.text}`}>
+                      <p
+                        className={`text-sm font-medium ${card.text}`}
+                      >
                         {card.label}
                       </p>
-                     <p
-  className="mt-3 text-3xl font-bold tracking-tight"
-  style={{ color: "var(--foreground)" }}
->
+
+                      <p
+                        className="mt-3 text-3xl font-bold tracking-tight"
+                        style={{
+                          color: "var(--foreground)",
+                        }}
+                      >
                         <AnimatedNumber
                           value={card.value}
                           active={chartReady}
@@ -368,7 +391,9 @@ export default function InventoryPage() {
             <section className="grid gap-6 lg:grid-cols-5">
               <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
                 <div>
-                  <h2 className="text-lg font-bold">Stock Distribution</h2>
+                  <h2 className="text-lg font-bold">
+                    Stock Distribution
+                  </h2>
 
                   <p className="mt-1 text-sm text-slate-500">
                     How your product variants are stocked.
@@ -378,7 +403,9 @@ export default function InventoryPage() {
                 <div className="flex flex-col items-center gap-6 py-7 sm:flex-row sm:justify-center">
                   <div
                     className={`relative flex h-44 w-44 shrink-0 items-center justify-center rounded-full transition-all duration-1000 ease-out ${
-                      chartReady ? "scale-100 rotate-0 opacity-100" : "scale-75 -rotate-90 opacity-0"
+                      chartReady
+                        ? "scale-100 rotate-0 opacity-100"
+                        : "scale-75 -rotate-90 opacity-0"
                     }`}
                     style={{ background: stockGradient }}
                     role="img"
@@ -436,15 +463,17 @@ export default function InventoryPage() {
 
                 {variants.length === 0 && (
                   <p className="text-center text-sm text-slate-500">
-                    Add product variants with stock quantities to see your
-                    distribution.
+                    Add product variants with stock quantities to see
+                    your distribution.
                   </p>
                 )}
               </article>
 
               <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-3">
                 <div className="mb-6">
-                  <h2 className="text-lg font-bold">Stock by Product</h2>
+                  <h2 className="text-lg font-bold">
+                    Stock by Product
+                  </h2>
 
                   <p className="mt-1 text-sm text-slate-500">
                     Compare available units across your catalogue.
@@ -453,11 +482,13 @@ export default function InventoryPage() {
 
                 {products.length === 0 ? (
                   <div className="rounded-xl bg-slate-50 p-8 text-center">
-                    <p className="font-medium">No products found</p>
+                    <p className="font-medium">
+                      No products found
+                    </p>
 
                     <p className="mt-2 text-sm text-slate-500">
-                      Your product stock chart will appear when products are
-                      available.
+                      Your product stock chart will appear when
+                      products are available.
                     </p>
                   </div>
                 ) : (
@@ -469,7 +500,9 @@ export default function InventoryPage() {
                       return (
                         <div
                           key={product.id}
-                          style={{ animationDelay: `${index * 100}ms` }}
+                          style={{
+                            animationDelay: `${index * 100}ms`,
+                          }}
                           className="animate-[inventory-enter_550ms_ease-out_both]"
                         >
                           <div className="mb-2 flex items-center justify-between gap-3">
@@ -489,7 +522,9 @@ export default function InventoryPage() {
                             <div
                               className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
                               style={{
-                                width: chartReady ? `${percentage}%` : "0%",
+                                width: chartReady
+                                  ? `${percentage}%`
+                                  : "0%",
                                 minWidth:
                                   chartReady && product.total > 0
                                     ? "4px"
@@ -506,7 +541,8 @@ export default function InventoryPage() {
 
                 {products.length > 8 && (
                   <p className="mt-5 text-xs text-slate-400">
-                    Showing the 8 products with the highest stock quantities.
+                    Showing the 8 products with the highest stock
+                    quantities.
                   </p>
                 )}
               </article>
@@ -515,7 +551,9 @@ export default function InventoryPage() {
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5 sm:p-6">
                 <div>
-                  <h2 className="text-lg font-bold">Inventory Details</h2>
+                  <h2 className="text-lg font-bold">
+                    Inventory Details
+                  </h2>
 
                   <p className="mt-1 text-sm text-slate-500">
                     Stock by size and color for each product variant.
@@ -531,10 +569,13 @@ export default function InventoryPage() {
                 <div className="p-10 text-center">
                   <div className="text-4xl">📦</div>
 
-                  <h3 className="mt-3 font-semibold">No products found</h3>
+                  <h3 className="mt-3 font-semibold">
+                    No products found
+                  </h3>
 
                   <p className="mt-2 text-sm text-slate-500">
-                    Add products to your store to start tracking inventory.
+                    Add products to your store to start tracking
+                    inventory.
                   </p>
 
                   <button
@@ -549,12 +590,24 @@ export default function InventoryPage() {
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                       <tr>
-                        <th className="px-5 py-4 font-semibold">Product</th>
-                        <th className="px-5 py-4 font-semibold">Category</th>
-                        <th className="px-5 py-4 font-semibold">Size</th>
-                        <th className="px-5 py-4 font-semibold">Color</th>
-                        <th className="px-5 py-4 font-semibold">Quantity</th>
-                        <th className="px-5 py-4 font-semibold">Status</th>
+                        <th className="px-5 py-4 font-semibold">
+                          Product
+                        </th>
+                        <th className="px-5 py-4 font-semibold">
+                          Category
+                        </th>
+                        <th className="px-5 py-4 font-semibold">
+                          Size
+                        </th>
+                        <th className="px-5 py-4 font-semibold">
+                          Color
+                        </th>
+                        <th className="px-5 py-4 font-semibold">
+                          Quantity
+                        </th>
+                        <th className="px-5 py-4 font-semibold">
+                          Status
+                        </th>
                       </tr>
                     </thead>
 
@@ -591,7 +644,8 @@ export default function InventoryPage() {
                         }
 
                         return productVariants.map((variant) => {
-                          const quantity = variant.stock_quantity ?? 0;
+                          const quantity =
+                            variant.stock_quantity ?? 0;
 
                           const status =
                             quantity <= 0
@@ -663,6 +717,7 @@ export default function InventoryPage() {
             opacity: 0;
             transform: translateY(12px);
           }
+
           to {
             opacity: 1;
             transform: translateY(0);
