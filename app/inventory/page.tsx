@@ -21,19 +21,61 @@ type Product = {
   product_variants: Variant[] | null;
 };
 
+function AnimatedNumber({
+  value,
+  active,
+}: {
+  value: number;
+  active: boolean;
+}) {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setDisplayValue(0);
+      return;
+    }
+
+    let frame = 0;
+    let animationFrame = 0;
+    const duration = 900;
+    let startTime: number | null = null;
+
+    function animate(timestamp: number) {
+      if (startTime === null) startTime = timestamp;
+
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      setDisplayValue(Math.round(value * eased));
+
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      }
+    }
+
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [value, active]);
+
+  return <>{displayValue.toLocaleString()}</>;
+}
+
 export default function InventoryPage() {
   const router = useRouter();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [chartReady, setChartReady] = useState(false);
 
-  // Load inventory belonging to the signed-in user's store.
   useEffect(() => {
     let cancelled = false;
 
     async function loadInventory() {
       setLoading(true);
+      setChartReady(false);
       setError("");
 
       try {
@@ -72,6 +114,13 @@ export default function InventoryPage() {
 
         if (!cancelled) {
           setProducts((data ?? []) as Product[]);
+
+          // Start the animations after the inventory has rendered.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (!cancelled) setChartReady(true);
+            });
+          });
         }
       } catch (err) {
         if (!cancelled) {
@@ -188,6 +237,42 @@ export default function InventoryPage() {
       ? "#e2e8f0"
       : `conic-gradient(#10b981 0deg ${inStockAngle}deg, #f59e0b ${inStockAngle}deg ${inStockAngle + lowStockAngle}deg, #f43f5e ${inStockAngle + lowStockAngle}deg 360deg)`;
 
+  const distributionItems = [
+    {
+      label: "In stock",
+      count: inStock,
+      percent: inStockPercent,
+      color: "bg-emerald-500",
+      dot: "bg-emerald-500",
+    },
+    {
+      label: "Low stock",
+      count: lowStock,
+      percent: lowStockPercent,
+      color: "bg-amber-500",
+      dot: "bg-amber-500",
+    },
+    {
+      label: "Out of stock",
+      count: outOfStock,
+      percent: outOfStockPercent,
+      color: "bg-rose-500",
+      dot: "bg-rose-500",
+    },
+  ];
+
+  const productStockRows = products
+    .map((product) => ({
+      ...product,
+      total: (product.product_variants ?? []).reduce(
+        (sum, variant) =>
+          sum + Math.max(0, variant.stock_quantity ?? 0),
+        0
+      ),
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8);
+
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
@@ -244,10 +329,11 @@ export default function InventoryPage() {
         ) : (
           <>
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {stockCards.map((card) => (
+              {stockCards.map((card, index) => (
                 <article
                   key={card.label}
-                  className={`rounded-2xl border border-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${card.color}`}
+                  style={{ animationDelay: `${index * 100}ms` }}
+                  className={`animate-[inventory-enter_650ms_ease-out_both] rounded-2xl border border-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${card.color}`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -256,7 +342,10 @@ export default function InventoryPage() {
                       </p>
 
                       <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-                        {card.value.toLocaleString()}
+                        <AnimatedNumber
+                          value={card.value}
+                          active={chartReady}
+                        />
                       </p>
                     </div>
 
@@ -286,14 +375,19 @@ export default function InventoryPage() {
 
                 <div className="flex flex-col items-center gap-6 py-7 sm:flex-row sm:justify-center">
                   <div
-                    className="relative flex h-44 w-44 shrink-0 items-center justify-center rounded-full"
+                    className={`relative flex h-44 w-44 shrink-0 items-center justify-center rounded-full transition-all duration-1000 ease-out ${
+                      chartReady ? "scale-100 rotate-0 opacity-100" : "scale-75 -rotate-90 opacity-0"
+                    }`}
                     style={{ background: stockGradient }}
                     role="img"
                     aria-label={`Stock distribution: ${inStock} in stock, ${lowStock} low stock, ${outOfStock} out of stock`}
                   >
                     <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white">
                       <span className="text-3xl font-bold">
-                        {variants.length}
+                        <AnimatedNumber
+                          value={variants.length}
+                          active={chartReady}
+                        />
                       </span>
 
                       <span className="text-xs text-slate-500">
@@ -303,29 +397,7 @@ export default function InventoryPage() {
                   </div>
 
                   <div className="w-full space-y-4">
-                    {[
-                      {
-                        label: "In stock",
-                        count: inStock,
-                        percent: inStockPercent,
-                        color: "bg-emerald-500",
-                        dot: "bg-emerald-500",
-                      },
-                      {
-                        label: "Low stock",
-                        count: lowStock,
-                        percent: lowStockPercent,
-                        color: "bg-amber-500",
-                        dot: "bg-amber-500",
-                      },
-                      {
-                        label: "Out of stock",
-                        count: outOfStock,
-                        percent: outOfStockPercent,
-                        color: "bg-rose-500",
-                        dot: "bg-rose-500",
-                      },
-                    ].map((item) => (
+                    {distributionItems.map((item, index) => (
                       <div key={item.label}>
                         <div className="mb-1.5 flex items-center justify-between gap-2 text-sm">
                           <span className="flex items-center gap-2 text-slate-600">
@@ -336,14 +408,23 @@ export default function InventoryPage() {
                           </span>
 
                           <span className="font-semibold">
-                            {item.count} ({item.percent.toFixed(0)}%)
+                            <AnimatedNumber
+                              value={item.count}
+                              active={chartReady}
+                            />{" "}
+                            ({chartReady ? item.percent.toFixed(0) : 0}%)
                           </span>
                         </div>
 
                         <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className={`h-full rounded-full transition-all duration-500 ${item.color}`}
-                            style={{ width: `${item.percent}%` }}
+                            className={`h-full rounded-full ${item.color}`}
+                            style={{
+                              width: chartReady
+                                ? `${item.percent}%`
+                                : "0%",
+                              transition: `width 1100ms cubic-bezier(0.22, 1, 0.36, 1) ${index * 180}ms`,
+                            }}
                           />
                         </div>
                       </div>
@@ -379,20 +460,16 @@ export default function InventoryPage() {
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    {products
-                      .map((product) => ({
-                        ...product,
-                        total: (product.product_variants ?? []).reduce(
-                          (sum, variant) =>
-                            sum +
-                            Math.max(0, variant.stock_quantity ?? 0),
-                          0
-                        ),
-                      }))
-                      .sort((a, b) => b.total - a.total)
-                      .slice(0, 8)
-                      .map((product) => (
-                        <div key={product.id}>
+                    {productStockRows.map((product, index) => {
+                      const percentage =
+                        (product.total / maxProductStock) * 100;
+
+                      return (
+                        <div
+                          key={product.id}
+                          style={{ animationDelay: `${index * 100}ms` }}
+                          className="animate-[inventory-enter_550ms_ease-out_both]"
+                        >
                           <div className="mb-2 flex items-center justify-between gap-3">
                             <span
                               className="max-w-[75%] truncate text-sm font-medium text-slate-700"
@@ -402,21 +479,26 @@ export default function InventoryPage() {
                             </span>
 
                             <span className="text-sm font-bold text-slate-900">
-                              {product.total} units
+                              {chartReady ? product.total : 0} units
                             </span>
                           </div>
 
                           <div className="h-3 overflow-hidden rounded-full bg-slate-100">
                             <div
-                              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-500"
+                              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
                               style={{
-                                width: `${(product.total / maxProductStock) * 100}%`,
-                                minWidth: product.total > 0 ? "4px" : "0",
+                                width: chartReady ? `${percentage}%` : "0%",
+                                minWidth:
+                                  chartReady && product.total > 0
+                                    ? "4px"
+                                    : "0",
+                                transition: `width 1200ms cubic-bezier(0.22, 1, 0.36, 1) ${index * 130}ms`,
                               }}
                             />
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
                   </div>
                 )}
 
@@ -565,13 +647,35 @@ export default function InventoryPage() {
               )}
 
               <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500">
-                Stock statuses are calculated from each variant&apos;s
+                Stock statuses are calculated from each variant's
                 quantity. Low stock is 1–3 units.
               </div>
             </section>
           </>
         )}
       </div>
+
+      <style jsx global>{`
+        @keyframes inventory-enter {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }
