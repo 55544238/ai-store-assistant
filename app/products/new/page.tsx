@@ -189,9 +189,10 @@ export default function NewProductPage() {
 
       // 7. Success
       setMessage("Product added successfully.");
+
       setTimeout(() => {
-  window.location.href = "/products";
-}, 1000);
+        window.location.href = "/products";
+      }, 1000);
 
       setName("");
       setDescription("");
@@ -263,35 +264,41 @@ export default function NewProductPage() {
   }
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-500 focus:ring-2 focus:ring-stone-100";
+    "mt-2 w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-500 focus:ring-2 focus:ring-stone-100 dark:border-[#303030] dark:bg-[#111111] dark:text-white dark:placeholder:text-stone-500 dark:focus:border-stone-500 dark:focus:ring-stone-800";
 
-  const labelClass = "text-sm font-medium text-stone-700";
+  const labelClass = "text-sm font-medium text-stone-700 dark:text-stone-300";
+
+  const cardClass =
+    "rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] dark:border-[#262626] dark:bg-[#0a0a0a] dark:shadow-none sm:p-7";
+
+  const iconClass =
+    "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl dark:bg-[#1c1c1c]";
 
   return (
-    <main className="min-h-screen bg-[#f7f6f3] px-4 py-8 text-stone-900 sm:px-6 lg:px-10 lg:py-12">
+    <main className="min-h-screen bg-[#f7f6f3] px-4 py-8 text-stone-900 transition-colors dark:bg-black dark:text-white sm:px-6 lg:px-10 lg:py-12">
       <div className="mx-auto max-w-6xl">
         <Link
           href="/products"
-          className="inline-flex items-center gap-2 text-sm text-stone-500 transition hover:text-black"
+          className="inline-flex items-center gap-2 text-sm text-stone-500 transition hover:text-black dark:text-stone-400 dark:hover:text-white"
         >
           <span aria-hidden="true">←</span>
           Back to Products
         </Link>
 
-        <header className="mb-8 mt-7 border-b border-stone-200 pb-7">
+        <header className="mb-8 mt-7 border-b border-stone-200 pb-7 dark:border-[#262626]">
           <div className="flex items-start gap-4">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-stone-200 bg-white text-2xl shadow-sm">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-stone-200 bg-white text-2xl shadow-sm dark:border-[#303030] dark:bg-[#111111] dark:shadow-none">
               🛍️
             </span>
 
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-500 dark:text-stone-400">
                 Store inventory
               </p>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Add New Product
               </h1>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-stone-500">
+              <p className="mt-3 max-w-xl text-sm leading-6 text-stone-500 dark:text-stone-400">
                 Add a product and tell your AI assistant exactly what is available.
               </p>
             </div>
@@ -300,18 +307,18 @@ export default function NewProductPage() {
 
         <form onSubmit={saveProduct} className="space-y-6">
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[0.85fr_1.4fr]">
-            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] sm:p-7">
+            <section className={cardClass}>
               <div className="mb-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-stone-500">
                   Product image
                 </p>
                 <h2 className="mt-2 text-lg font-semibold">Photo</h2>
-                <p className="mt-1 text-sm leading-5 text-stone-500">
+                <p className="mt-1 text-sm leading-5 text-stone-500 dark:text-stone-400">
                   Choose a clear image of your product.
                 </p>
               </div>
 
-              <label className="group flex min-h-[300px] w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed border-stone-300 bg-[#faf9f6] p-4 text-center transition hover:border-stone-500 hover:bg-stone-50 sm:min-h-[360px]">
+              <label className="group flex min-h-[300px] w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed border-stone-300 bg-[#faf9f6] p-4 text-center transition hover:border-stone-500 hover:bg-stone-50 dark:border-[#383838] dark:bg-[#111111] dark:hover:border-stone-500 dark:hover:bg-[#171717] sm:min-h-[360px]">
                 {photoPreview ? (
                   <img
                     src={photoPreview}
@@ -320,16 +327,16 @@ export default function NewProductPage() {
                   />
                 ) : (
                   <>
-                    <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-stone-200 bg-white text-2xl shadow-sm transition group-hover:scale-105">
+                    <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-stone-200 bg-white text-2xl shadow-sm transition group-hover:scale-105 dark:border-[#303030] dark:bg-[#1b1b1b] dark:shadow-none">
                       📷
                     </span>
-                    <span className="text-sm font-medium text-stone-800">
+                    <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
                       Upload product image
                     </span>
-                    <span className="mt-2 max-w-[230px] text-xs leading-5 text-stone-500">
+                    <span className="mt-2 max-w-[230px] text-xs leading-5 text-stone-500 dark:text-stone-400">
                       JPG, PNG, or WebP. Maximum size: 5 MB.
                     </span>
-                    <span className="mt-5 rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 transition group-hover:border-stone-500">
+                    <span className="mt-5 rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 transition group-hover:border-stone-500 dark:border-[#383838] dark:bg-[#202020] dark:text-stone-200 dark:group-hover:border-stone-500">
                       Choose image
                     </span>
                   </>
@@ -355,25 +362,23 @@ export default function NewProductPage() {
                     setPhotoFile(null);
                     setError("");
                   }}
-                  className="mt-3 text-sm text-stone-500 underline underline-offset-4 transition hover:text-black"
+                  className="mt-3 text-sm text-stone-500 underline underline-offset-4 transition hover:text-black dark:text-stone-400 dark:hover:text-white"
                 >
                   Remove photo
                 </button>
               )}
 
-              <p className="mt-4 text-xs leading-5 text-stone-400">
+              <p className="mt-4 text-xs leading-5 text-stone-400 dark:text-stone-500">
                 Your selected photo will be uploaded when you save the product.
               </p>
             </section>
 
-            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] sm:p-7">
+            <section className={cardClass}>
               <div className="mb-6 flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl">
-                  📦
-                </span>
+                <span className={iconClass}>📦</span>
                 <div>
                   <h2 className="text-lg font-semibold">Basic Information</h2>
-                  <p className="mt-1 text-sm text-stone-500">
+                  <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                     Tell customers about this product.
                   </p>
                 </div>
@@ -431,7 +436,7 @@ export default function NewProductPage() {
                     Price (USD) <span className="text-stone-400">*</span>
                   </label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 dark:text-stone-500">
                       $
                     </span>
                     <input
@@ -451,16 +456,14 @@ export default function NewProductPage() {
             </section>
           </div>
 
-          <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] sm:p-7">
+          <section className={cardClass}>
             <div className="mb-6 flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl">
-                👟
-              </span>
+              <span className={iconClass}>👟</span>
               <div>
                 <h2 className="text-lg font-semibold">
                   Sizes, Colors &amp; Stock
                 </h2>
-                <p className="mt-1 text-sm text-stone-500">
+                <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                   Tell the AI which version of this product is available.
                 </p>
               </div>
@@ -526,14 +529,12 @@ export default function NewProductPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] sm:p-7">
+          <section className={cardClass}>
             <div className="mb-6 flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl">
-                ✅
-              </span>
+              <span className={iconClass}>✅</span>
               <div>
                 <h2 className="text-lg font-semibold">Product Status</h2>
-                <p className="mt-1 text-sm text-stone-500">
+                <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                   Control whether customers can see this product.
                 </p>
               </div>
@@ -547,10 +548,10 @@ export default function NewProductPage() {
                 className="mt-1 h-4 w-4 accent-black"
               />
               <span>
-                <span className="block text-sm font-medium text-stone-800">
+                <span className="block text-sm font-medium text-stone-800 dark:text-stone-200">
                   Available for sale
                 </span>
-                <span className="mt-1 block text-xs leading-5 text-stone-500">
+                <span className="mt-1 block text-xs leading-5 text-stone-500 dark:text-stone-400">
                   The AI assistant can recommend this product to customers.
                 </span>
               </span>
@@ -560,7 +561,7 @@ export default function NewProductPage() {
           {error && (
             <p
               role="alert"
-              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-[#200b0b] dark:text-red-300"
             >
               {error}
             </p>
@@ -569,21 +570,21 @@ export default function NewProductPage() {
           {message && (
             <p
               role="status"
-              className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+              className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900/60 dark:bg-[#0b1b10] dark:text-green-300"
             >
               {message}
             </p>
           )}
 
-          <footer className="flex flex-col-reverse gap-3 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs leading-5 text-stone-500">
+          <footer className="flex flex-col-reverse gap-3 border-t border-stone-200 pt-6 dark:border-[#262626] sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-stone-500 dark:text-stone-400">
               Fields marked * are required.
             </p>
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/products"
-                className="inline-flex items-center justify-center rounded-xl border border-stone-300 bg-white px-6 py-3 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                className="inline-flex items-center justify-center rounded-xl border border-stone-300 bg-white px-6 py-3 text-sm font-medium text-stone-700 transition hover:bg-stone-100 dark:border-[#383838] dark:bg-[#111111] dark:text-stone-200 dark:hover:bg-[#202020]"
               >
                 Cancel
               </Link>
@@ -591,7 +592,7 @@ export default function NewProductPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex items-center justify-center rounded-xl bg-black px-7 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center justify-center rounded-xl bg-black px-7 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-stone-200 dark:focus:ring-offset-black"
               >
                 {saving ? "Saving product..." : "💾 Add Product"}
               </button>
@@ -599,7 +600,7 @@ export default function NewProductPage() {
           </footer>
         </form>
 
-        <p className="mt-8 text-center text-xs text-stone-400">
+        <p className="mt-8 text-center text-xs text-stone-400 dark:text-stone-600">
           Manage your collection with care.
         </p>
       </div>
