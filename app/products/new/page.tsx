@@ -266,13 +266,8 @@ export default function NewProductPage() {
   const inputClass =
     "mt-2 w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-500 focus:ring-2 focus:ring-stone-100 dark:border-[#303030] dark:bg-[#111111] dark:text-white dark:placeholder:text-stone-500 dark:focus:border-stone-500 dark:focus:ring-stone-800";
 
-  const labelClass = "text-sm font-medium text-stone-700 dark:text-stone-300";
-
-  const cardClass =
-    "rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] dark:border-[#262626] dark:bg-[#0a0a0a] dark:shadow-none sm:p-7";
-
-  const iconClass =
-    "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl dark:bg-[#1c1c1c]";
+  const labelClass =
+    "text-sm font-medium text-stone-700 dark:text-stone-300";
 
   return (
     <main className="min-h-screen bg-[#f7f6f3] px-4 py-8 text-stone-900 transition-colors dark:bg-black dark:text-white sm:px-6 lg:px-10 lg:py-12">
@@ -307,7 +302,7 @@ export default function NewProductPage() {
 
         <form onSubmit={saveProduct} className="space-y-6">
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[0.85fr_1.4fr]">
-            <section className={cardClass}>
+            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] dark:border-[#262626] dark:bg-[#0a0a0a] dark:shadow-none sm:p-7">
               <div className="mb-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-stone-500">
                   Product image
@@ -373,9 +368,11 @@ export default function NewProductPage() {
               </p>
             </section>
 
-            <section className={cardClass}>
+            <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] dark:border-[#262626] dark:bg-[#0a0a0a] dark:shadow-none sm:p-7">
               <div className="mb-6 flex items-start gap-3">
-                <span className={iconClass}>📦</span>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl dark:bg-[#1c1c1c]">
+                  📦
+                </span>
                 <div>
                   <h2 className="text-lg font-semibold">Basic Information</h2>
                   <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
@@ -456,9 +453,11 @@ export default function NewProductPage() {
             </section>
           </div>
 
-          <section className={cardClass}>
+          <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] dark:border-[#262626] dark:bg-[#0a0a0a] dark:shadow-none sm:p-7">
             <div className="mb-6 flex items-start gap-3">
-              <span className={iconClass}>👟</span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl dark:bg-[#1c1c1c]">
+                👟
+              </span>
               <div>
                 <h2 className="text-lg font-semibold">
                   Sizes, Colors &amp; Stock
@@ -529,9 +528,11 @@ export default function NewProductPage() {
             </div>
           </section>
 
-          <section className={cardClass}>
+          <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.025)] dark:border-[#262626] dark:bg-[#0a0a0a] dark:shadow-none sm:p-7">
             <div className="mb-6 flex items-start gap-3">
-              <span className={iconClass}>✅</span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl dark:bg-[#1c1c1c]">
+                ✅
+              </span>
               <div>
                 <h2 className="text-lg font-semibold">Product Status</h2>
                 <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
