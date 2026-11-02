@@ -2,80 +2,51 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/src/lib/supabase";
-
-type Variant = {
-  id: string;
-  size: string | null;
-  color: string | null;
-  stock_quantity: number | null;
-  price_override: number | null;
-};
 
 type Product = {
   id: string;
   name: string;
   category: string | null;
+  price: number | string | null;
   status: string | null;
-  product_variants: Variant[] | null;
 };
 
-function AnimatedNumber({
-  value,
-  active,
-}: {
-  value: number;
-  active: boolean;
-}) {
-  const [displayValue, setDisplayValue] = useState(0);
+type Variant = {
+  product_id: string;
+  stock_quantity: number | null;
+  price_override: number | string | null;
+};
 
-  useEffect(() => {
-    if (!active) {
-      setDisplayValue(0);
-      return;
-    }
+type ProductImage = {
+  product_id: string;
+  image_url: string;
+  sort_order: number | null;
+};
 
-    let frame = 0;
-    let animationFrame = 0;
-    const duration = 900;
-    let startTime: number | null = null;
+type DisplayProduct = {
+  id: string;
+  name: string;
+  category: string;
+  price: string;
+  stock: number;
+  status: string;
+  image_url: string | null;
+};
 
-    function animate(timestamp: number) {
-      if (startTime === null) startTime = timestamp;
-
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-
-      setDisplayValue(Math.round(value * eased));
-
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate);
-      }
-    }
-
-    animationFrame = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(animationFrame);
-  }, [value, active]);
-
-  return <>{displayValue.toLocaleString()}</>;
-}
-
-export default function InventoryPage() {
-  const router = useRouter();
-
-  const [products, setProducts] = useState<Product[]>([]);
+export default function ProductsPage() {
+  const [products, setProducts] = useState<DisplayProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [chartReady, setChartReady] = useState(false);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All categories");
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadInventory() {
+    async function loadProducts() {
       setLoading(true);
-      setChartReady(false);
       setError("");
 
       try {
@@ -87,595 +58,391 @@ export default function InventoryPage() {
         if (userError) throw userError;
 
         if (!user) {
-          throw new Error("Please log in again to view your inventory.");
+          throw new Error("Please sign in to view your products.");
         }
 
-        const { data: membership, error: membershipError } = await supabase
-          .from("store_members")
-          .select("store_id")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const { data: membership, error: membershipError } =
+          await supabase
+            .from("store_members")
+            .select("store_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
 
         if (membershipError) throw membershipError;
 
-        if (!membership?.store_id) {
-          throw new Error("No store is connected to this account.");
-        }
-
-        const { data, error: queryError } = await supabase
-          .from("products")
-          .select(
-            "id, name, category, status, product_variants(id, size, color, stock_quantity, price_override)"
-          )
-          .eq("store_id", membership.store_id)
-          .order("name");
-
-        if (queryError) throw queryError;
-
-        if (!cancelled) {
-          setProducts((data ?? []) as Product[]);
-
-          // Start the animations after the inventory has rendered.
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              if (!cancelled) setChartReady(true);
-            });
-          });
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Could not load inventory."
+        if (!membership) {
+          throw new Error(
+            "Your account does not have a store membership."
           );
-          setProducts([]);
         }
+
+        const { data: productData, error: productError } =
+          await supabase
+            .from("products")
+            .select("id, name, category, price, status")
+            .eq("store_id", membership.store_id)
+            .order("created_at", { ascending: false });
+
+        if (productError) throw productError;
+
+        const rows = (productData ?? []) as Product[];
+
+        if (rows.length === 0) {
+          if (!cancelled) setProducts([]);
+          return;
+        }
+
+        const productIds = rows.map((product) => product.id);
+
+        const [
+          { data: variantData, error: variantError },
+          { data: imageData, error: imageError },
+        ] = await Promise.all([
+          supabase
+            .from("product_variants")
+            .select("product_id, stock_quantity, price_override")
+            .in("product_id", productIds),
+
+          supabase
+            .from("product_images")
+            .select("product_id, image_url, sort_order")
+            .in("product_id", productIds)
+            .order("sort_order", { ascending: true }),
+        ]);
+
+        if (variantError) throw variantError;
+        if (imageError) throw imageError;
+
+        const variants = (variantData ?? []) as Variant[];
+        const images = (imageData ?? []) as ProductImage[];
+
+        const displayProducts: DisplayProduct[] = rows.map((product) => {
+          const productVariants = variants.filter(
+            (variant) => variant.product_id === product.id
+          );
+
+          const stock = productVariants.reduce(
+            (total, variant) =>
+              total + Number(variant.stock_quantity ?? 0),
+            0
+          );
+
+          const variantPrice = productVariants.find(
+            (variant) => variant.price_override !== null
+          )?.price_override;
+
+          const price = variantPrice ?? product.price;
+          const numericPrice = Number(price ?? 0);
+
+          let status = "Active";
+
+          if (product.status?.toLowerCase() !== "active") {
+            status = "Inactive";
+          } else if (stock === 0) {
+            status = "Out of stock";
+          }
+
+          const productImage = images.find(
+            (image) => image.product_id === product.id
+          );
+
+          return {
+            id: product.id,
+            name: product.name,
+            category: product.category || "Uncategorized",
+            price: numericPrice.toLocaleString(),
+            stock,
+            status,
+            image_url: productImage?.image_url ?? null,
+          };
+        });
+
+        if (!cancelled) setProducts(displayProducts);
+      } catch (err: unknown) {
+        console.error("Load products error:", err);
+
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred.";
+
+        if (!cancelled) setError(errorMessage);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
-    void loadInventory();
+    loadProducts();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const variants = products.flatMap((product) =>
-    (product.product_variants ?? []).map((variant) => ({
-      ...variant,
-      productName: product.name,
-      category: product.category,
-    }))
-  );
-
-  const totalUnits = variants.reduce(
-    (sum, variant) => sum + Math.max(0, variant.stock_quantity ?? 0),
-    0
-  );
-
-  const inStock = variants.filter(
-    (variant) => (variant.stock_quantity ?? 0) > 3
-  ).length;
-
-  const lowStock = variants.filter((variant) => {
-    const quantity = variant.stock_quantity ?? 0;
-    return quantity > 0 && quantity <= 3;
-  }).length;
-
-  const outOfStock = variants.filter(
-    (variant) => (variant.stock_quantity ?? 0) <= 0
-  ).length;
-
-  const stockCards = [
-    {
-      label: "Total Units",
-      value: totalUnits,
-      icon: "📦",
-      color: "bg-blue-50",
-      iconBg: "bg-blue-100",
-      text: "text-blue-700",
-      description: "Physical units in stock",
-    },
-    {
-      label: "In Stock",
-      value: inStock,
-      icon: "✅",
-      color: "bg-emerald-50",
-      iconBg: "bg-emerald-100",
-      text: "text-emerald-700",
-      description: "Variants with 4+ units",
-    },
-    {
-      label: "Low Stock",
-      value: lowStock,
-      icon: "⚠️",
-      color: "bg-amber-50",
-      iconBg: "bg-amber-100",
-      text: "text-amber-700",
-      description: "Variants with 1–3 units",
-    },
-    {
-      label: "Out of Stock",
-      value: outOfStock,
-      icon: "🚫",
-      color: "bg-rose-50",
-      iconBg: "bg-rose-100",
-      text: "text-rose-700",
-      description: "Variants with zero units",
-    },
+  const categories = [
+    "All categories",
+    ...Array.from(
+      new Set(products.map((product) => product.category))
+    ),
   ];
 
-  const maxProductStock = Math.max(
-    1,
-    ...products.map((product) =>
-      (product.product_variants ?? []).reduce(
-        (sum, variant) => sum + Math.max(0, variant.stock_quantity ?? 0),
-        0
-      )
-    )
-  );
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch = product.name
+      .toLowerCase()
+      .includes(search.toLowerCase());
 
-  const inStockPercent =
-    variants.length > 0 ? (inStock / variants.length) * 100 : 0;
+    const matchesCategory =
+      categoryFilter === "All categories" ||
+      product.category === categoryFilter;
 
-  const lowStockPercent =
-    variants.length > 0 ? (lowStock / variants.length) * 100 : 0;
+    return matchesSearch && matchesCategory;
+  });
 
-  const outOfStockPercent =
-    variants.length > 0 ? (outOfStock / variants.length) * 100 : 0;
-
-  const inStockAngle = (inStockPercent / 100) * 360;
-  const lowStockAngle = (lowStockPercent / 100) * 360;
-
-  const stockGradient =
-    variants.length === 0
-      ? "#e2e8f0"
-      : `conic-gradient(#10b981 0deg ${inStockAngle}deg, #f59e0b ${inStockAngle}deg ${inStockAngle + lowStockAngle}deg, #f43f5e ${inStockAngle + lowStockAngle}deg 360deg)`;
-
-  const distributionItems = [
-    {
-      label: "In stock",
-      count: inStock,
-      percent: inStockPercent,
-      color: "bg-emerald-500",
-      dot: "bg-emerald-500",
-    },
-    {
-      label: "Low stock",
-      count: lowStock,
-      percent: lowStockPercent,
-      color: "bg-amber-500",
-      dot: "bg-amber-500",
-    },
-    {
-      label: "Out of stock",
-      count: outOfStock,
-      percent: outOfStockPercent,
-      color: "bg-rose-500",
-      dot: "bg-rose-500",
-    },
-  ];
-
-  const productStockRows = products
-    .map((product) => ({
-      ...product,
-      total: (product.product_variants ?? []).reduce(
-        (sum, variant) =>
-          sum + Math.max(0, variant.stock_quantity ?? 0),
-        0
-      ),
-    }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 8);
+  const activeCount = products.filter(
+    (product) => product.status === "Active"
+  ).length;
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-8">
+    <main className="min-h-screen bg-slate-50 text-slate-900 dark:bg-black dark:text-white">
+      <header className="border-b border-slate-200 bg-white dark:border-white/10 dark:bg-black">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <button
-              onClick={() => router.push("/")}
-              className="mb-3 cursor-pointer text-sm text-slate-500 hover:text-slate-900"
+            <Link
+              href="/"
+              className="mb-4 inline-flex items-center rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
             >
               ← Back to Dashboard
-            </button>
+            </Link>
 
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Inventory Overview
+            <h1 className="text-3xl font-bold tracking-tight">
+              Products
             </h1>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Monitor your fashion products, stock levels and restocking needs.
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Manage your products, prices, and inventory.
             </p>
           </div>
 
-          <button
-            onClick={() => router.push("/products")}
-            className="cursor-pointer rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+          <Link
+            href="/products/new"
+            className="inline-flex items-center justify-center rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-slate-200"
           >
-            Manage Products →
-          </button>
+            <span className="mr-2 text-lg">+</span>
+            Add Product
+          </Link>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl space-y-6 p-5 sm:p-8">
+      <section className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#111111]">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Total products
+            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight">
+              {loading ? "—" : products.length}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#111111]">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Active products
+            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-green-600 dark:text-green-400">
+              {loading ? "—" : activeCount}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#111111]">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Showing products
+            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight">
+              {loading ? "—" : filteredProducts.length}
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-md">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+              ⌕
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search products..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-slate-400 dark:border-white/10 dark:bg-[#111111] dark:text-white dark:placeholder:text-slate-500 dark:focus:border-white/30"
+            />
+          </div>
+
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none dark:border-white/10 dark:bg-[#111111] dark:text-white"
+          >
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500">
-            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-            Loading your real inventory...
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                key={index}
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-[#111111]"
+              >
+                <div className="aspect-[4/3] animate-pulse bg-slate-100 dark:bg-white/5" />
+                <div className="space-y-3 p-5">
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100 dark:bg-white/10" />
+                  <div className="h-3 w-1/2 animate-pulse rounded bg-slate-100 dark:bg-white/10" />
+                  <div className="h-8 w-full animate-pulse rounded bg-slate-100 dark:bg-white/10" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-rose-200 bg-white p-6">
-            <h2 className="font-semibold text-rose-700">
-              Could not load inventory
-            </h2>
-
-            <p className="mt-2 break-words text-sm text-slate-600">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-500/20 dark:bg-red-500/5">
+            <p className="font-semibold text-red-700 dark:text-red-400">
+              Could not load products
+            </p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-300">
               {error}
             </p>
-
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 cursor-pointer rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700"
-            >
-              Try Again
-            </button>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-white/15 dark:bg-[#111111]">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl dark:bg-white/5">
+              📦
+            </div>
+            <h2 className="mt-5 text-lg font-semibold">
+              {products.length === 0
+                ? "Your catalog is waiting"
+                : "No matching products"}
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
+              {products.length === 0
+                ? "Add your first product to start building your store catalog."
+                : "Try another product name or choose a different category."}
+            </p>
+            {products.length === 0 && (
+              <Link
+                href="/products/new"
+                className="mt-6 inline-flex rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-slate-200"
+              >
+                + Add your first product
+              </Link>
+            )}
           </div>
         ) : (
-          <>
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {stockCards.map((card, index) => (
-                <article
-                  key={card.label}
-                  style={{ animationDelay: `${index * 100}ms` }}
-                  className={`animate-[inventory-enter_650ms_ease-out_both] rounded-2xl border border-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${card.color}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className={`text-sm font-medium ${card.text}`}>
-                        {card.label}
-                      </p>
-
-                      <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-                        <AnimatedNumber
-                          value={card.value}
-                          active={chartReady}
-                        />
-                      </p>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredProducts.map((product) => (
+              <article
+                key={product.id}
+                className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#111111] dark:hover:border-white/20"
+              >
+                <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-[#1b1b1b]">
+                  {product.image_url ? (
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+                      <span className="text-4xl">📦</span>
+                      <span className="mt-2 text-xs font-medium">
+                        No product photo
+                      </span>
                     </div>
+                  )}
 
-                    <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-xl text-xl ${card.iconBg}`}
-                    >
-                      {card.icon}
-                    </div>
-                  </div>
-
-                  <p className="mt-3 text-xs text-slate-500">
-                    {card.description}
-                  </p>
-                </article>
-              ))}
-            </section>
-
-            <section className="grid gap-6 lg:grid-cols-5">
-              <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
-                <div>
-                  <h2 className="text-lg font-bold">Stock Distribution</h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    How your product variants are stocked.
-                  </p>
-                </div>
-
-                <div className="flex flex-col items-center gap-6 py-7 sm:flex-row sm:justify-center">
-                  <div
-                    className={`relative flex h-44 w-44 shrink-0 items-center justify-center rounded-full transition-all duration-1000 ease-out ${
-                      chartReady ? "scale-100 rotate-0 opacity-100" : "scale-75 -rotate-90 opacity-0"
+                  <span
+                    className={`absolute right-3 top-3 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                      product.status === "Active"
+                        ? "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-400"
+                        : product.status === "Out of stock"
+                          ? "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-400"
+                          : "bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-300"
                     }`}
-                    style={{ background: stockGradient }}
-                    role="img"
-                    aria-label={`Stock distribution: ${inStock} in stock, ${lowStock} low stock, ${outOfStock} out of stock`}
                   >
-                    <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white">
-                      <span className="text-3xl font-bold">
-                        <AnimatedNumber
-                          value={variants.length}
-                          active={chartReady}
-                        />
-                      </span>
+                    {product.status}
+                  </span>
+                </div>
 
-                      <span className="text-xs text-slate-500">
-                        Variants
-                      </span>
+                <div className="p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    {product.category}
+                  </p>
+
+                  <h2 className="mt-2 min-h-12 text-base font-semibold leading-6 text-slate-900 dark:text-white">
+                    {product.name}
+                  </h2>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-white/10">
+                    <div>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        Price
+                      </p>
+                      <p className="mt-1 text-lg font-bold">
+                        {product.price}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        Available stock
+                      </p>
+                      <p
+                        className={`mt-1 text-sm font-semibold ${
+                          product.stock === 0
+                            ? "text-red-600 dark:text-red-400"
+                            : product.stock < 5
+                              ? "text-orange-600 dark:text-orange-400"
+                              : "text-slate-700 dark:text-slate-200"
+                        }`}
+                      >
+                        {product.stock} units
+                      </p>
                     </div>
                   </div>
 
-                  <div className="w-full space-y-4">
-                    {distributionItems.map((item, index) => (
-                      <div key={item.label}>
-                        <div className="mb-1.5 flex items-center justify-between gap-2 text-sm">
-                          <span className="flex items-center gap-2 text-slate-600">
-                            <span
-                              className={`h-2.5 w-2.5 rounded-full ${item.dot}`}
-                            />
-                            {item.label}
-                          </span>
-
-                          <span className="font-semibold">
-                            <AnimatedNumber
-                              value={item.count}
-                              active={chartReady}
-                            />{" "}
-                            ({chartReady ? item.percent.toFixed(0) : 0}%)
-                          </span>
-                        </div>
-
-                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className={`h-full rounded-full ${item.color}`}
-                            style={{
-                              width: chartReady
-                                ? `${item.percent}%`
-                                : "0%",
-                              transition: `width 1100ms cubic-bezier(0.22, 1, 0.36, 1) ${index * 180}ms`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {variants.length === 0 && (
-                  <p className="text-center text-sm text-slate-500">
-                    Add product variants with stock quantities to see your
-                    distribution.
-                  </p>
-                )}
-              </article>
-
-              <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-3">
-                <div className="mb-6">
-                  <h2 className="text-lg font-bold">Stock by Product</h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    Compare available units across your catalogue.
-                  </p>
-                </div>
-
-                {products.length === 0 ? (
-                  <div className="rounded-xl bg-slate-50 p-8 text-center">
-                    <p className="font-medium">No products found</p>
-
-                    <p className="mt-2 text-sm text-slate-500">
-                      Your product stock chart will appear when products are
-                      available.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-5">
-                    {productStockRows.map((product, index) => {
-                      const percentage =
-                        (product.total / maxProductStock) * 100;
-
-                      return (
-                        <div
-                          key={product.id}
-                          style={{ animationDelay: `${index * 100}ms` }}
-                          className="animate-[inventory-enter_550ms_ease-out_both]"
-                        >
-                          <div className="mb-2 flex items-center justify-between gap-3">
-                            <span
-                              className="max-w-[75%] truncate text-sm font-medium text-slate-700"
-                              title={product.name}
-                            >
-                              {product.name}
-                            </span>
-
-                            <span className="text-sm font-bold text-slate-900">
-                              {chartReady ? product.total : 0} units
-                            </span>
-                          </div>
-
-                          <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
-                              style={{
-                                width: chartReady ? `${percentage}%` : "0%",
-                                minWidth:
-                                  chartReady && product.total > 0
-                                    ? "4px"
-                                    : "0",
-                                transition: `width 1200ms cubic-bezier(0.22, 1, 0.36, 1) ${index * 130}ms`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {products.length > 8 && (
-                  <p className="mt-5 text-xs text-slate-400">
-                    Showing the 8 products with the highest stock quantities.
-                  </p>
-                )}
-              </article>
-            </section>
-
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5 sm:p-6">
-                <div>
-                  <h2 className="text-lg font-bold">Inventory Details</h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    Stock by size and color for each product variant.
-                  </p>
-                </div>
-
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
-                  {products.length} products
-                </span>
-              </div>
-
-              {products.length === 0 ? (
-                <div className="p-10 text-center">
-                  <div className="text-4xl">📦</div>
-
-                  <h3 className="mt-3 font-semibold">No products found</h3>
-
-                  <p className="mt-2 text-sm text-slate-500">
-                    Add products to your store to start tracking inventory.
-                  </p>
-
-                  <button
-                    onClick={() => router.push("/products")}
-                    className="mt-5 cursor-pointer rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700"
+                  <Link
+                    href={`/products/edit?id=${product.id}`}
+                    className="mt-5 flex w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-black dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white"
                   >
-                    View Products
-                  </button>
+                    Edit product →
+                  </Link>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-5 py-4 font-semibold">Product</th>
-                        <th className="px-5 py-4 font-semibold">Category</th>
-                        <th className="px-5 py-4 font-semibold">Size</th>
-                        <th className="px-5 py-4 font-semibold">Color</th>
-                        <th className="px-5 py-4 font-semibold">Quantity</th>
-                        <th className="px-5 py-4 font-semibold">Status</th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-slate-100">
-                      {products.map((product) => {
-                        const productVariants =
-                          product.product_variants ?? [];
-
-                        if (productVariants.length === 0) {
-                          return (
-                            <tr key={product.id}>
-                              <td className="px-5 py-4 font-medium">
-                                {product.name}
-                              </td>
-
-                              <td className="px-5 py-4">
-                                {product.category ?? "—"}
-                              </td>
-
-                              <td className="px-5 py-4">—</td>
-                              <td className="px-5 py-4">—</td>
-
-                              <td className="px-5 py-4 text-slate-400">
-                                Not configured
-                              </td>
-
-                              <td className="px-5 py-4">
-                                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                                  No variants
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        }
-
-                        return productVariants.map((variant) => {
-                          const quantity = variant.stock_quantity ?? 0;
-
-                          const status =
-                            quantity <= 0
-                              ? "Out of stock"
-                              : quantity <= 3
-                                ? "Low stock"
-                                : "In stock";
-
-                          const statusStyle =
-                            quantity <= 0
-                              ? "bg-rose-100 text-rose-700"
-                              : quantity <= 3
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-emerald-100 text-emerald-700";
-
-                          return (
-                            <tr
-                              key={variant.id}
-                              className="transition hover:bg-slate-50"
-                            >
-                              <td className="px-5 py-4 font-medium">
-                                {product.name}
-                              </td>
-
-                              <td className="px-5 py-4 text-slate-500">
-                                {product.category ?? "—"}
-                              </td>
-
-                              <td className="px-5 py-4">
-                                {variant.size ?? "—"}
-                              </td>
-
-                              <td className="px-5 py-4">
-                                {variant.color ?? "—"}
-                              </td>
-
-                              <td className="px-5 py-4 font-semibold">
-                                {quantity}
-                              </td>
-
-                              <td className="px-5 py-4">
-                                <span
-                                  className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle}`}
-                                >
-                                  {status}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500">
-                Stock statuses are calculated from each variant's
-                quantity. Low stock is 1–3 units.
-              </div>
-            </section>
-          </>
+              </article>
+            ))}
+          </div>
         )}
-      </div>
 
-      <style jsx global>{`
-        @keyframes inventory-enter {
-          from {
-            opacity: 0;
-            transform: translateY(12px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
+        <div className="mt-10 rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#111111]">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-600 dark:bg-white/10 dark:text-white">
+              AI
+            </div>
 
-        @media (prefers-reduced-motion: reduce) {
-          *,
-          *::before,
-          *::after {
-            animation-duration: 0.01ms !important;
-            transition-duration: 0.01ms !important;
-          }
-        }
-      `}</style>
+            <div>
+              <h2 className="font-semibold">
+                Your AI will use these products
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                Every product you add here becomes part of your store
+                catalog. The AI assistant will use the catalog to
+                answer customer questions about prices, sizes, colors,
+                and stock.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
