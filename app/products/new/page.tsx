@@ -5,13 +5,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/src/lib/supabase";
 
-const STORE_ID = "138ee5b7-d235-4cfa-b620-8adcfb8b5838";
 const BUCKET = "product-images";
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 export default function NewProductPage() {
   const [name, setName] = useState("");
-  const [photoPreview, setPhotoPreview] = useState("");
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Shoes");
@@ -43,95 +42,87 @@ export default function NewProductPage() {
       return;
     }
 
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview);
+    }
+
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
   }
 
-  async function saveProduct(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
+  async function saveProduct(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
-    setError("");
 
-    const numericPrice = Number(price);
-    const numericStock = Number(stock);
-
-    if (
-      !name.trim() ||
-      price === "" ||
-      !size.trim() ||
-      !color.trim()
-    ) {
-      setError("Fill in the product name, price, size, and color.");
-      return;
-    }
-
-    if (
-      !Number.isFinite(numericPrice) ||
-      numericPrice < 0 ||
-      !Number.isInteger(numericStock) ||
-      numericStock < 0
-    ) {
-      setError("Enter a valid price and stock quantity.");
-      return;
-    }
+    if (saving) return;
 
     setSaving(true);
+    setError("");
+    setMessage("");
 
-    let uploadedPath: string | null = null;
-    let createdProductId: string | null = null;
+    let failedAt = "Form validation";
+    let uploadedImagePath: string | null = null;
+    let productId: string | null = null;
 
     try {
-      // Upload the selected photo first, if one was chosen.
-      let imageUrl: string | null = null;
+      // 1. Validate the form
+      const numericPrice = Number(price);
+      const numericStock = Number(stock);
 
-      if (photoFile) {
-        const { data: sessionData, error: sessionError } =
-          await supabase.auth.getSession();
-
-        if (sessionError) throw sessionError;
-
-        if (!sessionData.session) {
-          throw new Error(
-            "Please sign in before uploading a product photo. Your product has not been saved."
-          );
-        }
-
-        const extension =
-          photoFile.type === "image/png"
-            ? "png"
-            : photoFile.type === "image/webp"
-              ? "webp"
-              : "jpg";
-
-        uploadedPath =
-          `${STORE_ID}/${crypto.randomUUID()}.${extension}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from(BUCKET)
-          .upload(uploadedPath, photoFile, {
-            contentType: photoFile.type,
-            upsert: false,
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: publicData } = supabase.storage
-          .from(BUCKET)
-          .getPublicUrl(uploadedPath);
-
-        imageUrl = publicData.publicUrl;
+      if (!name.trim() || price === "" || !size.trim() || !color.trim()) {
+        throw new Error("Fill in the product name, price, size, and color.");
       }
 
-      // Save the main product details.
+      if (
+        !Number.isFinite(numericPrice) ||
+        numericPrice < 0 ||
+        !Number.isInteger(numericStock) ||
+        numericStock < 0
+      ) {
+        throw new Error("Enter a valid price and stock quantity.");
+      }
+
+      // 2. Get the signed-in user
+      failedAt = "Checking your login";
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+
+      if (!user) {
+        throw new Error("Please sign in again before adding a product.");
+      }
+
+      // 3. Find the user's store
+      failedAt = "Finding your store";
+
+      const { data: membership, error: membershipError } = await supabase
+        .from("store_members")
+        .select("store_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (membershipError) throw membershipError;
+
+      if (!membership?.store_id) {
+        throw new Error("Your account does not have a store yet.");
+      }
+
+      const storeId = membership.store_id;
+
+      // 4. Create the product
+      failedAt = "Creating the product";
+
       const { data: product, error: productError } = await supabase
         .from("products")
         .insert({
-          store_id: STORE_ID,
+          store_id: storeId,
           name: name.trim(),
           description: description.trim(),
           category,
+          price: numericPrice,
           status: available ? "active" : "inactive",
         })
         .select("id")
@@ -139,67 +130,130 @@ export default function NewProductPage() {
 
       if (productError) throw productError;
 
-      createdProductId = product.id;
+      productId = product.id;
 
-      // Save size, color, SKU, price, and stock.
+      // 5. Create the product variant
+      failedAt = "Creating the product variant";
+
       const { error: variantError } = await supabase
         .from("product_variants")
         .insert({
           product_id: product.id,
-          sku: sku.trim() || null,
           size: size.trim(),
           color: color.trim(),
-          price_override: numericPrice,
+          sku: sku.trim() || null,
           stock_quantity: numericStock,
-          status: available ? "active" : "inactive",
+          price_override: null,
         });
 
       if (variantError) throw variantError;
 
-      // Save the uploaded image URL in product_images.
-      if (imageUrl) {
-        const { error: imageRowError } = await supabase
+      // 6. Upload and save the image, if selected
+      if (photoFile) {
+        const extension =
+          photoFile.type === "image/png"
+            ? "png"
+            : photoFile.type === "image/webp"
+              ? "webp"
+              : "jpg";
+
+        uploadedImagePath = `${storeId}/${crypto.randomUUID()}.${extension}`;
+
+        failedAt = "Uploading the product photo to Supabase Storage";
+
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET)
+          .upload(uploadedImagePath, photoFile, {
+            contentType: photoFile.type,
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: imageData } = supabase.storage
+          .from(BUCKET)
+          .getPublicUrl(uploadedImagePath);
+
+        failedAt = "Saving the product photo record";
+
+        const { error: imageError } = await supabase
           .from("product_images")
           .insert({
             product_id: product.id,
-            image_url: imageUrl,
+            image_url: imageData.publicUrl,
             sort_order: 0,
           });
 
-        if (imageRowError) throw imageRowError;
+        if (imageError) throw imageError;
       }
 
-      setMessage("Product saved successfully! Redirecting...");
+      // 7. Success
+      setMessage("Product added successfully.");
 
-      window.setTimeout(() => {
-        window.location.href = "/products";
-      }, 1200);
+      setName("");
+      setDescription("");
+      setPrice("");
+      setSize("");
+      setColor("");
+      setSku("");
+      setStock("1");
+      setAvailable(true);
+      setPhotoFile(null);
+
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
+      }
+
+      setPhotoPreview(null);
     } catch (err) {
-      console.error("Product save error:", err);
+      console.error("Product save failed at:", failedAt, err);
 
-      // Attempt to remove the product if a later save step failed.
-      if (createdProductId) {
-        await supabase
-          .from("product_variants")
-          .delete()
-          .eq("product_id", createdProductId);
-
-        await supabase
-          .from("product_images")
-          .delete()
-          .eq("product_id", createdProductId);
-
-        await supabase
-          .from("products")
-          .delete()
-          .eq("id", createdProductId);
-      }
-
-      setError(
+      const errorDetails =
         err instanceof Error
           ? err.message
-          : "Could not save the product. Please try again."
-      );
+          : "An unknown error occurred.";
+
+      setError(`${failedAt} failed: ${errorDetails}`);
+
+      // Clean up the product and its related records if creation failed.
+      if (productId) {
+        const { error: imageCleanupError } = await supabase
+          .from("product_images")
+          .delete()
+          .eq("product_id", productId);
+
+        if (imageCleanupError) {
+          console.error("Image record cleanup failed:", imageCleanupError);
+        }
+
+        const { error: variantCleanupError } = await supabase
+          .from("product_variants")
+          .delete()
+          .eq("product_id", productId);
+
+        if (variantCleanupError) {
+          console.error("Variant cleanup failed:", variantCleanupError);
+        }
+
+        const { error: productCleanupError } = await supabase
+          .from("products")
+          .delete()
+          .eq("id", productId);
+
+        if (productCleanupError) {
+          console.error("Product cleanup failed:", productCleanupError);
+        }
+      }
+
+      if (uploadedImagePath) {
+        const { error: storageCleanupError } = await supabase.storage
+          .from(BUCKET)
+          .remove([uploadedImagePath]);
+
+        if (storageCleanupError) {
+          console.error("Photo cleanup failed:", storageCleanupError);
+        }
+      }
     } finally {
       setSaving(false);
     }
@@ -248,9 +302,7 @@ export default function NewProductPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
                   Product image
                 </p>
-                <h2 className="mt-2 text-lg font-semibold">
-                  Photo
-                </h2>
+                <h2 className="mt-2 text-lg font-semibold">Photo</h2>
                 <p className="mt-1 text-sm leading-5 text-stone-500">
                   Choose a clear image of your product.
                 </p>
@@ -295,7 +347,8 @@ export default function NewProductPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setPhotoPreview("");
+                    URL.revokeObjectURL(photoPreview);
+                    setPhotoPreview(null);
                     setPhotoFile(null);
                     setError("");
                   }}
@@ -316,9 +369,7 @@ export default function NewProductPage() {
                   📦
                 </span>
                 <div>
-                  <h2 className="text-lg font-semibold">
-                    Basic Information
-                  </h2>
+                  <h2 className="text-lg font-semibold">Basic Information</h2>
                   <p className="mt-1 text-sm text-stone-500">
                     Tell customers about this product.
                   </p>
