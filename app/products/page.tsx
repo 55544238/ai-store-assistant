@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "@/src/lib/supabase";
 
@@ -30,9 +29,18 @@ type DisplayProduct = {
   name: string;
   category: string;
   price: string;
+  numericPrice: number;
   stock: number;
   status: string;
   image_url: string | null;
+};
+
+// Formatter for consistent price rendering
+const formatPrice = (amount: number) => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
 };
 
 export default function ProductsPage() {
@@ -61,27 +69,23 @@ export default function ProductsPage() {
           throw new Error("Please sign in to view your products.");
         }
 
-        const { data: membership, error: membershipError } =
-          await supabase
-            .from("store_members")
-            .select("store_id")
-            .eq("user_id", user.id)
-            .maybeSingle();
+        const { data: membership, error: membershipError } = await supabase
+          .from("store_members")
+          .select("store_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
 
         if (membershipError) throw membershipError;
 
         if (!membership) {
-          throw new Error(
-            "Your account does not have a store membership."
-          );
+          throw new Error("Your account does not have a store membership.");
         }
 
-        const { data: productData, error: productError } =
-          await supabase
-            .from("products")
-            .select("id, name, category, price, status")
-            .eq("store_id", membership.store_id)
-            .order("created_at", { ascending: false });
+        const { data: productData, error: productError } = await supabase
+          .from("products")
+          .select("id, name, category, price, status")
+          .eq("store_id", membership.store_id)
+          .order("created_at", { ascending: false });
 
         if (productError) throw productError;
 
@@ -122,8 +126,7 @@ export default function ProductsPage() {
           );
 
           const stock = productVariants.reduce(
-            (total, variant) =>
-              total + Number(variant.stock_quantity ?? 0),
+            (total, variant) => total + Number(variant.stock_quantity ?? 0),
             0
           );
 
@@ -135,7 +138,6 @@ export default function ProductsPage() {
           const numericPrice = Number(price ?? 0);
 
           let status = "Active";
-
           if (product.status?.toLowerCase() !== "active") {
             status = "Inactive";
           } else if (stock === 0) {
@@ -149,8 +151,9 @@ export default function ProductsPage() {
           return {
             id: product.id,
             name: product.name,
-            category: product.category || "Uncategorized",
-            price: numericPrice.toLocaleString(),
+            category: product.category?.trim() || "Uncategorized",
+            price: formatPrice(numericPrice),
+            numericPrice,
             stock,
             status,
             image_url: productImage?.image_url ?? null,
@@ -162,9 +165,7 @@ export default function ProductsPage() {
         console.error("Load products error:", err);
 
         const message =
-          err instanceof Error
-            ? err.message
-            : "An unexpected error occurred.";
+          err instanceof Error ? err.message : "An unexpected error occurred.";
 
         if (!cancelled) setError(message);
       } finally {
@@ -179,32 +180,38 @@ export default function ProductsPage() {
     };
   }, []);
 
-  const categories = [
-    "All categories",
-    ...Array.from(
-      new Set(products.map((product) => product.category))
-    ),
-  ];
+  // Memoized Categories to avoid unnecessary recalculations
+  const categories = useMemo(() => {
+    const rawCategories = products
+      .map((p) => p.category)
+      .filter((cat) => cat && cat !== "All categories");
+    return ["All categories", ...Array.from(new Set(rawCategories))];
+  }, [products]);
 
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.name
-      .toLowerCase()
-      .includes(search.toLowerCase());
+  // Memoized Filtered List
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const matchesSearch = product.name
+        .toLowerCase()
+        .includes(search.toLowerCase());
 
-    const matchesCategory =
-      categoryFilter === "All categories" ||
-      product.category === categoryFilter;
+      const matchesCategory =
+        categoryFilter === "All categories" ||
+        product.category === categoryFilter;
 
-    return matchesSearch && matchesCategory;
-  });
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, search, categoryFilter]);
 
-  const activeCount = products.filter(
-    (product) => product.status === "Active"
-  ).length;
+  const activeCount = useMemo(
+    () => products.filter((p) => p.status === "Active").length,
+    [products]
+  );
 
-  const lowStockCount = products.filter(
-    (product) => product.stock > 0 && product.stock < 5
-  ).length;
+  const lowStockCount = useMemo(
+    () => products.filter((p) => p.stock > 0 && p.stock < 5).length,
+    [products]
+  );
 
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-slate-900 dark:bg-black dark:text-white">
@@ -218,9 +225,7 @@ export default function ProductsPage() {
               ← Back to Dashboard
             </Link>
 
-            <h1 className="text-3xl font-bold tracking-tight">
-              Products
-            </h1>
+            <h1 className="text-3xl font-bold tracking-tight">Products</h1>
 
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
               Manage your products, prices, and inventory.
@@ -350,9 +355,7 @@ export default function ProductsPage() {
         ) : (
           <>
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                Your catalog
-              </h2>
+              <h2 className="text-lg font-semibold">Your catalog</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 {filteredProducts.length}{" "}
                 {filteredProducts.length === 1 ? "product" : "products"}
@@ -390,8 +393,8 @@ export default function ProductsPage() {
                         product.status === "Active"
                           ? "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-400"
                           : product.status === "Out of stock"
-                            ? "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-400"
-                            : "bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-300"
+                          ? "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-400"
+                          : "bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-300"
                       }`}
                     >
                       {product.status}
@@ -426,8 +429,8 @@ export default function ProductsPage() {
                             product.stock === 0
                               ? "text-red-600 dark:text-red-400"
                               : product.stock < 5
-                                ? "text-orange-600 dark:text-orange-400"
-                                : "text-slate-700 dark:text-slate-200"
+                              ? "text-orange-600 dark:text-orange-400"
+                              : "text-slate-700 dark:text-slate-200"
                           }`}
                         >
                           {product.stock} units
